@@ -20,6 +20,7 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.FileAttributeView;
+import java.nio.file.attribute.FileTime;
 import java.nio.file.spi.FileSystemProvider;
 import java.util.Map;
 import java.util.Set;
@@ -196,7 +197,53 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
     @Override
     public final <A extends BasicFileAttributes> A readAttributes(final Path path,
             final Class<A> type, final LinkOption... options) throws IOException {
-        throw new UnsupportedOperationException("Not implemented");
+        return (A) new BasicFileAttributes() {
+
+            @Override
+            public FileTime lastModifiedTime() {
+                throw new UnsupportedOperationException("Not implemented");
+            }
+
+            @Override
+            public FileTime lastAccessTime() {
+                throw new UnsupportedOperationException("Not implemented");
+            }
+
+            @Override
+            public FileTime creationTime() {
+                throw new UnsupportedOperationException("Not implemented");
+            }
+
+            @Override
+            public boolean isRegularFile() {
+               return true;
+            }
+
+            @Override
+            public boolean isDirectory() {
+                return false;
+            }
+
+            @Override
+            public boolean isSymbolicLink() {
+                return false;
+            }
+
+            @Override
+            public boolean isOther() {
+                return false;
+            }
+
+            @Override
+            public long size() {
+                throw new UnsupportedOperationException("Not implemented");
+            }
+
+            @Override
+            public Object fileKey() {
+                throw new UnsupportedOperationException("Not implemented");
+            }
+        };
     }
 
     @Override

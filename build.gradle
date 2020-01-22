@@ -9,6 +9,7 @@ buildscript {
 plugins {
     id 'java-library'
     id 'maven-publish'
+    id 'signing'
     id 'com.palantir.git-version' version "0.11.0"
 }
 
@@ -16,8 +17,9 @@ plugins {
 apply from: 'gradle/jacoco.coverage.gradle'
 
 group = 'org.magicdgs'
-version gitVersion()
+
 final isRelease = Boolean.getBoolean("release")
+version = (isRelease ? gitVersion() : gitVersion() + "-SNAPSHOT")
 description = """HTTP/S FileSystem provider for Java NIO.2"""
 
 // library dependencies
@@ -41,7 +43,7 @@ dependencies {
 
 // for managing the wrapper task
 wrapper {
-    gradleVersion = '6.1'
+    gradleVersion = '6.1.1'
 }
 
 java {
@@ -123,8 +125,8 @@ tasks.withType(Jar) {
     }
     // add manifest information
     manifest {
-        attributes 'Implementation-Title': rootProject.name,
-                   'Implementation-Version': version
+        attributes 'Implementation-Title': project.name,
+                   'Implementation-Version': project.version
     }
 }
 
@@ -136,7 +138,7 @@ publishing {
             pom {
                 name = 'jsr203-http'
                 packaging = 'jar'
-                description = 'An NIO plugin for http'
+                description = project.description
                 url = 'https://github.com/magicDGS/jsr203-http'
 
                 developers {
@@ -163,15 +165,22 @@ publishing {
             repositories {
                 maven {
                     credentials {
-                        username = isRelease ? project.findProperty("sonatypeUsername") : System.env.ARTIFACTORY_USERNAME
-                        password = isRelease ? project.findProperty("sonatypePassword") : System.env.ARTIFACTORY_PASSWORD
+                        username = isRelease ? project.findProperty("sonatypeUsername") : project.findProperty("artifactoryUsername")
+                        password = isRelease ? project.findProperty("sonatypePassword") : project.findProperty("artifactoryPassword")
                     }
                     def release = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
                     def snapshot = "https://broadinstitute.jfrog.io/broadinstitute/libs-snapshot-local/"
                     url = isRelease ? release : snapshot
                 }
             }
-
         }
     }
 }
+
+signing {
+    required { isRelease && gradle.taskGraph.hasTask("publishLibraryPublicationToMavenRepository") }
+    if( required ) {
+        sign publishing.publications.library
+    }
+}
+

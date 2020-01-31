@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
@@ -158,6 +159,8 @@ class URLSeekableByteChannel implements SeekableByteChannel {
             backedStream = new BufferedInputStream(connection.getInputStream());
             channel = Channels.newChannel(backedStream);
             this.position = position;
+        } catch (final FileNotFoundException ex){
+            throw ex;
         } catch (final IOException ex){
             throw new IOException("Failure while instantiating connection to: " + url.toString() + " at position: " + position, ex);
         }

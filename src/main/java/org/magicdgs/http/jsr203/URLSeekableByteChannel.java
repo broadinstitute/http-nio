@@ -25,6 +25,7 @@ import java.nio.channels.SeekableByteChannel;
  */
 class URLSeekableByteChannel implements SeekableByteChannel {
 
+    private static final long SKIP_DISTANCE = 8 * 1024;
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     // url and proxy for the file
@@ -54,7 +55,7 @@ class URLSeekableByteChannel implements SeekableByteChannel {
     }
 
     @Override
-    public int write(ByteBuffer src) throws IOException {
+    public int write(ByteBuffer src) {
         throw new NonWritableChannelException();
     }
 
@@ -74,15 +75,16 @@ class URLSeekableByteChannel implements SeekableByteChannel {
         if (!isOpen()) {
             throw new ClosedChannelException();
         }
-
-        if (this.position < newPosition) {
+        if (this.position == newPosition){
+            //nothing to do here
+        } else if (this.position < newPosition && this.position - newPosition < SKIP_DISTANCE) {
             // if the current position is before, do not open a new connection
             // but skip the bytes until the new position
             final long bytesToSkip = newPosition - this.position;
             final long skipped = backedStream.skip(bytesToSkip);
             logger.debug("Skipped {} bytes out of {} for setting position to {} (previously on {})",
                     bytesToSkip, skipped, newPosition, position);
-        } else if (this.position > newPosition) {
+        } else  {
             // in this case, we require to re-instantiate the channel
             // opening at the new position - and closing the previous
             close();
@@ -143,5 +145,6 @@ class URLSeekableByteChannel implements SeekableByteChannel {
         // get the channel from the backed stream
         backedStream = connection.getInputStream();
         channel = Channels.newChannel(backedStream);
+        this.position = position;
     }
 }

@@ -3,6 +3,7 @@ package org.magicdgs.http.jsr203;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
@@ -77,13 +78,20 @@ class URLSeekableByteChannel implements SeekableByteChannel {
         }
         if (this.position == newPosition){
             //nothing to do here
-        } else if (this.position < newPosition && this.position - newPosition < SKIP_DISTANCE) {
+        } else if (this.position < newPosition && newPosition - this.position < SKIP_DISTANCE) {
             // if the current position is before, do not open a new connection
             // but skip the bytes until the new position
-            final long bytesToSkip = newPosition - this.position;
-            final long skipped = backedStream.skip(bytesToSkip);
+            long bytesToSkip = newPosition - this.position;
+            while(bytesToSkip > 0) {
+                final long skipped = backedStream.skip(bytesToSkip);
+                if( skipped <= 0){
+                    throw new IOException("Failed to skip any bytes");
+                }
+                bytesToSkip -= skipped;
+            }
+
             logger.debug("Skipped {} bytes out of {} for setting position to {} (previously on {})",
-                    bytesToSkip, skipped, newPosition, position);
+                    bytesToSkip, bytesToSkip, newPosition, position);
         } else  {
             // in this case, we require to re-instantiate the channel
             // opening at the new position - and closing the previous
@@ -121,7 +129,7 @@ class URLSeekableByteChannel implements SeekableByteChannel {
     }
 
     @Override
-    public SeekableByteChannel truncate(long size) throws IOException {
+    public SeekableByteChannel truncate(long size) {
         throw new NonWritableChannelException();
     }
 
@@ -132,19 +140,26 @@ class URLSeekableByteChannel implements SeekableByteChannel {
 
     @Override
     public synchronized void close() throws IOException {
+        // TODO disconnect the underlying connection object that provides the streams
         // this should close also the backed stream
         channel.close();
     }
 
-    // open a readable byte channel for the requrested position
+    // open a readable byte channel for the requested position
     private synchronized void instantiateChannel(final long position) throws IOException {
-        final URLConnection connection = url.openConnection();
-        if (position > 0) {
-            HttpUtils.setRangeRequest(connection, position, -1);
+        try {
+            final URLConnection connection = url.openConnection();
+            if (position > 0) {
+                HttpUtils.setRangeRequest(connection, position, -1);
+            }
+
+            // get the channel from the backed stream
+            //TODO BufferedInputStream might be unecessary
+            backedStream = new BufferedInputStream(connection.getInputStream());
+            channel = Channels.newChannel(backedStream);
+            this.position = position;
+        } catch (final IOException ex){
+            throw new IOException("Failure while instantiating connection to: " + url.toString() + " at position: " + position, ex);
         }
-        // get the channel from the backed stream
-        backedStream = connection.getInputStream();
-        channel = Channels.newChannel(backedStream);
-        this.position = position;
     }
 }

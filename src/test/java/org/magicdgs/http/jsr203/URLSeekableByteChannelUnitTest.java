@@ -5,6 +5,8 @@ import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
 import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
@@ -198,5 +200,13 @@ public class URLSeekableByteChannelUnitTest extends BaseTest {
         // 3. read
         Assert.assertThrows(ClosedChannelException.class,
                 () -> channel.read(ByteBuffer.allocate(1)));
+    }
+
+    @Test
+    public void testPositionOnGoogleFile() throws IOException {
+        URL url = new URL("https://storage.googleapis.com/hellbender/test/resources/benchmark/CEUTrio.HiSeq.WEx.b37.NA12892.bam.bai");
+        URLSeekableByteChannel channel = new URLSeekableByteChannel(url);
+        channel.position(10000);
+        channel.read(ByteBuffer.allocate(100));
     }
 }

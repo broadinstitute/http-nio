@@ -63,7 +63,7 @@ final class HttpFileSystem extends FileSystem {
      */
     @Override
     public void close() {
-        logger.warn("{} is always open (no closed)", this.getClass());
+        logger.warn("{} is always open (not closed)", this.getClass());
     }
 
     /**
@@ -157,7 +157,7 @@ final class HttpFileSystem extends FileSystem {
     }
 
     @Override
-    public WatchService newWatchService() throws IOException {
+    public WatchService newWatchService() {
         throw new UnsupportedOperationException("Not implemented");
     }
 

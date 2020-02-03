@@ -53,15 +53,17 @@ final class HttpPath implements Path {
 
     // path - similar to other implementation of Path
     private final byte[] normalizedPath;
+
     // offsets for the separator (computed if needed)
     private volatile int[] offsets;
 
     // query for the URL (may be null)
     private final String query;
+
     // reference for the URL (may be null) / fragment for the URI representation
     private final String reference;
 
-    // true if the paht is absolute; false otherwise
+    // true if the path is absolute; false otherwise
     private final boolean absolute;
 
     /**

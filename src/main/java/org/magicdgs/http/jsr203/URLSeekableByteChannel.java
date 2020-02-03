@@ -27,6 +27,7 @@ import java.nio.channels.SeekableByteChannel;
  */
 class URLSeekableByteChannel implements SeekableByteChannel {
 
+
     private static final long SKIP_DISTANCE = 8 * 1024;
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
@@ -80,7 +81,7 @@ class URLSeekableByteChannel implements SeekableByteChannel {
         if (this.position == newPosition){
             //nothing to do here
         } else if (this.position < newPosition && newPosition - this.position < SKIP_DISTANCE) {
-            // if the current position is before, do not open a new connection
+            // if the current position is before but nearby do not open a new connection
             // but skip the bytes until the new position
             long bytesToSkip = newPosition - this.position;
             while(bytesToSkip > 0) {
@@ -90,7 +91,6 @@ class URLSeekableByteChannel implements SeekableByteChannel {
                 }
                 bytesToSkip -= skipped;
             }
-
             logger.debug("Skipped {} bytes out of {} for setting position to {} (previously on {})",
                     bytesToSkip, bytesToSkip, newPosition, position);
         } else  {

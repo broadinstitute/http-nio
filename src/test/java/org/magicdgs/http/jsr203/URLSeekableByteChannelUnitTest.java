@@ -11,16 +11,24 @@ import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.NonWritableChannelException;
+import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.Iterator;
+import java.util.List;
 import java.util.stream.Stream;
 
 /**
  * @author Daniel Gomez-Sanchez (magicDGS)
  */
 public class URLSeekableByteChannelUnitTest extends BaseTest {
+
+    public static final String LARGE_FILE_ON_GOOGLE = "https://storage.googleapis.com/hellbender/test/resources/benchmark/CEUTrio.HiSeq.WEx.b37.NA12892.bam";
+    public static final String BIG_TXT_GOOGLE = "https://storage.googleapis.com/hellbender/test/resources/nio/big.txt";
+    public static final String BIG_TXT_LOCAL = "testdata/big.txt";
 
     @Test(expectedExceptions = FileNotFoundException.class)
     public void testNonExistentUrl() throws Exception {
@@ -198,15 +206,84 @@ public class URLSeekableByteChannelUnitTest extends BaseTest {
         // 2. size
         Assert.assertThrows(ClosedChannelException.class, () -> channel.size());
         // 3. read
-        Assert.assertThrows(ClosedChannelException.class,
-                () -> channel.read(ByteBuffer.allocate(1)));
+        Assert.assertThrows(ClosedChannelException.class, () -> channel.read(ByteBuffer.allocate(1)));
     }
 
     @Test
     public void testPositionOnGoogleFile() throws IOException {
-        URL url = new URL("https://storage.googleapis.com/hellbender/test/resources/benchmark/CEUTrio.HiSeq.WEx.b37.NA12892.bam.bai");
-        URLSeekableByteChannel channel = new URLSeekableByteChannel(url);
-        channel.position(10000);
-        channel.read(ByteBuffer.allocate(100));
+        URL url = new URL(LARGE_FILE_ON_GOOGLE);
+        try(URLSeekableByteChannel channel = new URLSeekableByteChannel(url)) {
+            channel.position(10000);
+            channel.read(ByteBuffer.allocate(100));
+        }
+    }
+
+    @Test(timeOut=10_000L) //time out if it's taking over 10 seconds to read, that indicates we're probably not skipping correctly
+    public void testReadAtEndOfLargeFileIsFast() throws IOException {
+        URL url = new URL(LARGE_FILE_ON_GOOGLE);
+        try(URLSeekableByteChannel channel = new URLSeekableByteChannel(url)) {
+            long size = channel.size();
+            Assert.assertEquals(size, 31710132189L);
+            channel.position(size - 200);
+            Assert.assertTrue(channel.read(ByteBuffer.allocate(100)) > 0);
+        }
+    }
+
+
+    @DataProvider
+    public Object[][] stepSize(){
+        return new Object[][]{{100},{1_000}, {10_000}, {100_000}, {1_000_000}};
+    }
+
+    @Test(dataProvider = "stepSize")
+    public void testDataIsConsistentForward(int stepSize) throws IOException {
+        URL url = new URL(BIG_TXT_GOOGLE);
+        try(final URLSeekableByteChannel remote = new URLSeekableByteChannel(url);
+            final SeekableByteChannel local = Files.newByteChannel(Paths.get(BIG_TXT_LOCAL))){
+            while( remote.position() < remote.size()) {
+                System.out.println("pos: " + remote.position() + " size: " + remote.size());
+                Assert.assertEquals(readAll(stepSize, remote), readAll(stepSize, local));
+            }
+        }
+    }
+
+    @DataProvider
+    public Object[][] steps(){
+        return new Object[][]{
+            { Arrays.asList(1, 100, 1000, 10000, 100_000) },
+            { Arrays.asList(100_000, 10_000, 1_000, 100, 1, 0)},
+                {Arrays.asList(1000, 999, 1000, 999, 1000, 999)},
+                {Arrays.asList(0,1,2,3,4,5,6,7,8,9,8,7,6,5,4,3,2,1,0)},
+                {Arrays.asList(100,151, 10_000, 824823, 10_000,151, 100)}
+        };
+    }
+
+    @Test(dataProvider = "steps")
+    public void testDataIsConsistentWhileSeeking(List<Integer> positions) throws IOException {
+        URL url = new URL(BIG_TXT_GOOGLE);
+        final int readlength = 100;
+        try(final URLSeekableByteChannel remote = new URLSeekableByteChannel(url);
+            final SeekableByteChannel local = Files.newByteChannel(Paths.get(BIG_TXT_LOCAL))){
+            for(int position : positions){
+                remote.position(position);
+                local.position(position);
+                System.out.println("Start pos: " + remote.position()+ " size: " + remote.size());
+                Assert.assertEquals(readAll(readlength, remote), readAll(readlength, local));
+                System.out.println("End pos: " + remote.position()+ " size: " + remote.size());
+            }
+        }
+    }
+
+    public static byte[] readAll(int length, ReadableByteChannel channel) throws IOException {
+        final ByteBuffer buff = ByteBuffer.allocate(length);
+        int read = 0;
+        while( read < length) {
+            final int lastRead = channel.read(buff);
+            if (lastRead == -1){
+                break;
+            }
+            read+= lastRead;
+        }
+        return buff.array();
     }
 }

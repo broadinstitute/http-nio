@@ -197,53 +197,11 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
     @Override
     public final <A extends BasicFileAttributes> A readAttributes(final Path path,
             final Class<A> type, final LinkOption... options) throws IOException {
-        return (A) new BasicFileAttributes() {
-
-            @Override
-            public FileTime lastModifiedTime() {
-                throw new UnsupportedOperationException("Not implemented");
-            }
-
-            @Override
-            public FileTime lastAccessTime() {
-                throw new UnsupportedOperationException("Not implemented");
-            }
-
-            @Override
-            public FileTime creationTime() {
-                throw new UnsupportedOperationException("Not implemented");
-            }
-
-            @Override
-            public boolean isRegularFile() {
-               return true;
-            }
-
-            @Override
-            public boolean isDirectory() {
-                return false;
-            }
-
-            @Override
-            public boolean isSymbolicLink() {
-                return false;
-            }
-
-            @Override
-            public boolean isOther() {
-                return false;
-            }
-
-            @Override
-            public long size() {
-                throw new UnsupportedOperationException("Not implemented");
-            }
-
-            @Override
-            public Object fileKey() {
-                throw new UnsupportedOperationException("Not implemented");
-            }
-        };
+        if ( type.equals(HttpBasicFileAttributes.class) || type.equals(BasicFileAttributes.class)) {
+            return  (A) new HttpBasicFileAttributes();
+        } else {
+            throw new UnsupportedOperationException("Can't provide attributes of the given type: " + type.getCanonicalName());
+        }
     }
 
     @Override
@@ -262,5 +220,54 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
     @Override
     public String toString() {
         return this.getClass().getSimpleName();
+    }
+
+
+    private static class HttpBasicFileAttributes implements BasicFileAttributes {
+
+        @Override
+        public FileTime lastModifiedTime() {
+            throw new UnsupportedOperationException("Not implemented");
+        }
+
+        @Override
+        public FileTime lastAccessTime() {
+            throw new UnsupportedOperationException("Not implemented");
+        }
+
+        @Override
+        public FileTime creationTime() {
+            throw new UnsupportedOperationException("Not implemented");
+        }
+
+        @Override
+        public boolean isRegularFile() {
+            return true;
+        }
+
+        @Override
+        public boolean isDirectory() {
+            return false;
+        }
+
+        @Override
+        public boolean isSymbolicLink() {
+            return false;
+        }
+
+        @Override
+        public boolean isOther() {
+            return false;
+        }
+
+        @Override
+        public long size() {
+            throw new UnsupportedOperationException("Not implemented");
+        }
+
+        @Override
+        public Object fileKey() {
+            throw new UnsupportedOperationException("Not implemented");
+        }
     }
 }

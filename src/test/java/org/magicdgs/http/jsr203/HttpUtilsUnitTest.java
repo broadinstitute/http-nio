@@ -34,8 +34,7 @@ public class HttpUtilsUnitTest extends BaseTest {
     }
 
     @Test(dataProvider = "illegalArgumentsForRangeRequest", expectedExceptions = IllegalArgumentException.class)
-    public void testSetRangeRequestIllegalArguments(final URLConnection connection, final int start, final int end)
-            throws Exception {
+    public void testSetRangeRequestIllegalArguments(final URLConnection connection, final int start, final int end) {
         HttpUtils.setRangeRequest(connection, start, end);
     }
 

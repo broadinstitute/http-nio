@@ -7,6 +7,7 @@ import java.io.BufferedInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.ByteBuffer;
@@ -27,7 +28,6 @@ import java.nio.channels.SeekableByteChannel;
  */
 class URLSeekableByteChannel implements SeekableByteChannel {
 
-
     private static final long SKIP_DISTANCE = 8 * 1024;
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
@@ -40,8 +40,9 @@ class URLSeekableByteChannel implements SeekableByteChannel {
     // the size of the whole file (-1 is not initialized)
     private long size = -1;
 
+    private URLConnection connection = null;
     private ReadableByteChannel channel = null;
-    private InputStream backedStream = null;
+    private InputStream backingStream = null;
 
 
     URLSeekableByteChannel(final URL url) throws IOException {
@@ -53,7 +54,9 @@ class URLSeekableByteChannel implements SeekableByteChannel {
     @Override
     public synchronized int read(final ByteBuffer dst) throws IOException {
         final int read = channel.read(dst);
-        this.position += read;
+        if( read != -1) {
+            this.position += read;
+        }
         return read;
     }
 
@@ -85,9 +88,9 @@ class URLSeekableByteChannel implements SeekableByteChannel {
             // but skip the bytes until the new position
             long bytesToSkip = newPosition - this.position;
             while(bytesToSkip > 0) {
-                final long skipped = backedStream.skip(bytesToSkip);
+                final long skipped = backingStream.skip(bytesToSkip);
                 if( skipped <= 0){
-                    throw new IOException("Failed to skip any bytes");
+                    throw new IOException("Failed to skip any bytes while moving from " + this.position + " to " + newPosition);
                 }
                 bytesToSkip -= skipped;
             }
@@ -141,23 +144,28 @@ class URLSeekableByteChannel implements SeekableByteChannel {
 
     @Override
     public synchronized void close() throws IOException {
-        // TODO disconnect the underlying connection object that provides the streams
-        // this should close also the backed stream
+        // this also closes the backing stream
         channel.close();
+
+        HttpUtils.disconnect(connection);
+        connection = null;
     }
 
     // open a readable byte channel for the requested position
     private synchronized void instantiateChannel(final long position) throws IOException {
         try {
-            final URLConnection connection = url.openConnection();
+            if( connection == null) {
+                connection = url.openConnection();
+            }
+
             if (position > 0) {
                 HttpUtils.setRangeRequest(connection, position, -1);
             }
 
             // get the channel from the backed stream
             //TODO BufferedInputStream might be unecessary
-            backedStream = new BufferedInputStream(connection.getInputStream());
-            channel = Channels.newChannel(backedStream);
+            backingStream = new BufferedInputStream(connection.getInputStream());
+            channel = Channels.newChannel(backingStream);
             this.position = position;
         } catch (final FileNotFoundException ex){
             throw ex;
@@ -165,4 +173,7 @@ class URLSeekableByteChannel implements SeekableByteChannel {
             throw new IOException("Failure while instantiating connection to: " + url.toString() + " at position: " + position, ex);
         }
     }
+
+
+
 }

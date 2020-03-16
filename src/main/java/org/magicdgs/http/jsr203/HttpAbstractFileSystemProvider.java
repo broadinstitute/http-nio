@@ -35,6 +35,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author Daniel Gomez-Sanchez (magicDGS)
  */
 abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
+    private static HttpFileSystemProviderSettings settings;
 
     // map of authorities and FileSystem - using a concurrent implementation for being tread-safe
     private final Map<String, HttpFileSystem> fileSystems = new ConcurrentHashMap<>();
@@ -63,8 +64,7 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
     }
 
     @Override
-    public final HttpFileSystem newFileSystem(final URI uri, final Map<String, ?> env)
-            throws IOException {
+    public final HttpFileSystem newFileSystem(final URI uri, final Map<String, ?> env) {
         checkUri(uri);
 
         if (fileSystems.containsKey(uri.getAuthority())) {
@@ -153,17 +153,17 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
     }
 
     @Override
-    public final boolean isSameFile(final Path path, final Path path2) throws IOException {
+    public final boolean isSameFile(final Path path, final Path path2) {
         throw new UnsupportedOperationException("Not implemented");
     }
 
     @Override
-    public final boolean isHidden(final Path path) throws IOException {
+    public final boolean isHidden(final Path path) {
         throw new UnsupportedOperationException("Not implemented");
     }
 
     @Override
-    public final FileStore getFileStore(final Path path) throws IOException {
+    public final FileStore getFileStore(final Path path) {
         throw new UnsupportedOperationException("Not implemented");
     }
 
@@ -222,6 +222,13 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
         return this.getClass().getSimpleName();
     }
 
+    public static synchronized HttpFileSystemProviderSettings getSettings(){
+        return settings;
+    }
+
+    public static synchronized void setSettings(HttpFileSystemProviderSettings settings){
+        HttpAbstractFileSystemProvider.settings = settings;
+    }
 
     private static class HttpBasicFileAttributes implements BasicFileAttributes {
 

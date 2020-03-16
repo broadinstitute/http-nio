@@ -162,7 +162,6 @@ class URLSeekableByteChannel implements SeekableByteChannel {
                 HttpUtils.setRangeRequest(connection, position, -1);
             }
 
-            // get the channel from the backed stream
             //TODO BufferedInputStream might be unecessary
             backingStream = new BufferedInputStream(connection.getInputStream());
             channel = Channels.newChannel(backingStream);

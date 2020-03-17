@@ -4,6 +4,8 @@ import java.net.Proxy;
 
 public class HttpFileSystemProviderSettings {
 
+    public static final HttpFileSystemProviderSettings DEFAULT_SETTINGS = new HttpFileSystemProviderSettings(null, false, 10, 3);
+
     private final Proxy proxy;
     private final boolean useCaching;
 
@@ -23,7 +25,7 @@ public class HttpFileSystemProviderSettings {
         return proxy;
     }
 
-    public boolean isUseCaching() {
+    public boolean isCachingUsed() {
         return useCaching;
     }
 

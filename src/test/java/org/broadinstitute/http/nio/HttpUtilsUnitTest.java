@@ -1,4 +1,4 @@
-package org.magicdgs.http.jsr203;
+package org.broadinstitute.http.nio;
 
 import org.mockito.Mockito;
 import org.testng.Assert;

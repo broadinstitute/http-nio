@@ -136,10 +136,10 @@ publishing {
             from components.java
 
             pom {
-                name = 'jsr203-http'
+                name = 'http-nio'
                 packaging = 'jar'
                 description = project.description
-                url = 'https://github.com/magicDGS/jsr203-http'
+                url = 'https://github.com/lbergelson/http-nio'
 
                 developers {
                     developer {
@@ -147,17 +147,22 @@ publishing {
                         name = 'Daniel Gómez-Sánchez'
                         url = 'https://github.com/magicDGS/'
                     }
+                    developer {
+                        id = "gatkdev"
+                        name = "GATK Development Team"
+                        email = "gatk-dev-public@broadinstitute.org"
+                    }
                 }
 
                 scm {
-                    url = 'git@github.com:magicDGS/jsr-203.git'
-                    connection = 'scm:git:git@github.com:magicDGS/jsr-203.git'
+                    url = 'git@github.com:lbergelson/http-nio.git'
+                    connection = 'scm:git:git@github.com:lbergelson/htt-nio.git'
                 }
 
                 licenses {
                     license {
                         name = 'BSD 3-Clause'
-                        url = 'https://github.com/magicDGS/jsr203-http/blob/master/LICENSE.txt'
+                        url = 'https://github.com/lbergelson/http-nio/blob/master/LICENSE.txt'
                         distribution = 'repo'
                     }
                 }

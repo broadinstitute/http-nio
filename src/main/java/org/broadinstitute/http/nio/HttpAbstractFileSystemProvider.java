@@ -1,4 +1,4 @@
-package org.magicdgs.http.jsr203;
+package org.broadinstitute.http.nio;
 
 import java.io.IOException;
 import java.net.URI;
@@ -194,6 +194,7 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
         throw new UnsupportedOperationException("Not implemented");
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public final <A extends BasicFileAttributes> A readAttributes(final Path path,
             final Class<A> type, final LinkOption... options) throws IOException {

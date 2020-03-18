@@ -1,4 +1,4 @@
-package org.magicdgs.http.jsr203;
+package org.broadinstitute.http.nio;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

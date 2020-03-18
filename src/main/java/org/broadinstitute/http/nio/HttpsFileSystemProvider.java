@@ -1,4 +1,4 @@
-package org.magicdgs.http.jsr203;
+package org.broadinstitute.http.nio;
 
 /**
  * Read-only {@link java.nio.file.spi.FileSystemProvider} for HTTPS.

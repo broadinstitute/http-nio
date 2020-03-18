@@ -1,4 +1,4 @@
-package org.magicdgs.http.jsr203;
+package org.broadinstitute.http.nio;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;

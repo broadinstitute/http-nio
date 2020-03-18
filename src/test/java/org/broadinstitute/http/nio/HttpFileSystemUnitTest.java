@@ -1,4 +1,4 @@
-package org.magicdgs.http.jsr203;
+package org.broadinstitute.http.nio;
 
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;

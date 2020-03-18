@@ -1,4 +1,4 @@
-package org.magicdgs.http.jsr203;
+package org.broadinstitute.http.nio;
 
 import org.mockito.internal.util.collections.Sets;
 import org.testng.Assert;

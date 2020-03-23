@@ -16,7 +16,7 @@ plugins {
 // Apply the custom jacoco coverage plugin
 apply from: 'gradle/jacoco.coverage.gradle'
 
-group = 'org.magicdgs'
+group = 'org.broadinstitute'
 
 final isRelease = Boolean.getBoolean("release")
 version = (isRelease ? gitVersion() : gitVersion() + "-SNAPSHOT")
@@ -53,7 +53,7 @@ java {
 
 tasks.withType(Javadoc) {
     // the title includes the version of the API
-    title = "jsr203-http $version API"
+    title = "http-nio $version API"
 
     // add the links to the Java8 API too
     options.links("http://docs.oracle.com/javase/8/docs/api/")

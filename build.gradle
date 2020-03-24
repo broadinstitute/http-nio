@@ -184,8 +184,7 @@ publishing {
 
 signing {
     required { isRelease && gradle.taskGraph.hasTask("publishLibraryPublicationToMavenRepository") }
-    if( required ) {
         sign publishing.publications.library
-    }
+    
 }
 

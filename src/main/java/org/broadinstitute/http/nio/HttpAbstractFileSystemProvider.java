@@ -53,7 +53,7 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
         // non-null URI
         Utils.nonNull(uri, () -> "null URI");
         // non-null authority
-        Utils.nonNull(uri.getAuthority(),
+        Utils.nonNull(uri.getRawAuthority(),
                 () -> String.format("%s requires URI with authority: invalid %s", this, uri));
         // check the scheme (sanity check)
         if (!getScheme().equalsIgnoreCase(uri.getScheme())) {
@@ -67,17 +67,17 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
     public final HttpFileSystem newFileSystem(final URI uri, final Map<String, ?> env) {
         checkUri(uri);
 
-        if (fileSystems.containsKey(uri.getAuthority())) {
+        if (fileSystems.containsKey(uri.getRawAuthority())) {
             throw new FileSystemAlreadyExistsException("URI: " + uri);
         }
 
-        return fileSystems.computeIfAbsent(uri.getAuthority(),
+        return fileSystems.computeIfAbsent(uri.getRawAuthority(),
                 (auth) -> new HttpFileSystem(this, auth));
     }
 
     @Override
     public final HttpFileSystem getFileSystem(final URI uri) {
-        final HttpFileSystem fs = fileSystems.get(checkUri(uri).getAuthority());
+        final HttpFileSystem fs = fileSystems.get(checkUri(uri).getRawAuthority());
         if (fs == null) {
             throw new FileSystemNotFoundException("URI: " + uri);
         }
@@ -88,7 +88,7 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
     public final HttpPath getPath(final URI uri) {
         checkUri(uri);
         return fileSystems
-                .computeIfAbsent(uri.getAuthority(), (auth) -> new HttpFileSystem(this, auth))
+                .computeIfAbsent(uri.getRawAuthority(), (auth) -> new HttpFileSystem(this, auth))
                 .getPath(uri);
     }
 

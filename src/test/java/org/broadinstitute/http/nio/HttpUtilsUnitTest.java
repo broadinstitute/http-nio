@@ -63,9 +63,11 @@ public class HttpUtilsUnitTest extends BaseTest {
         };
     }
 
+    // This tests fails when using verizon because they return 200 and a page with adds when you visit an unknown site
+    // probably other home internet providers fail too
     @Test(dataProvider = "nonExistantUrlStrings")
     public void testNonExistingUrl(final String urlString) throws IOException {
-        final URL noExistant = URI.create(urlString).toURL();
-        Assert.assertFalse(HttpUtils.exists(noExistant));
+        final URL nonExistant = URI.create(urlString).toURL();
+        Assert.assertFalse(HttpUtils.exists(nonExistant));
     }
 }

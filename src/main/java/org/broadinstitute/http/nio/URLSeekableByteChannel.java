@@ -125,7 +125,9 @@ class URLSeekableByteChannel implements SeekableByteChannel {
                 }
             } finally {
                 // disconnect if possible
-                HttpUtils.disconnect(connection);
+               if( connection != null) {
+                   HttpUtils.disconnect(connection);
+               }
             }
         }
         return size;
@@ -146,8 +148,10 @@ class URLSeekableByteChannel implements SeekableByteChannel {
         // this also closes the backing stream
         channel.close();
 
-        HttpUtils.disconnect(connection);
-        connection = null;
+        if( connection != null ) {
+            HttpUtils.disconnect(connection);
+            connection = null;
+        }
     }
 
     // open a readable byte channel for the requested position

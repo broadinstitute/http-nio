@@ -182,9 +182,11 @@ publishing {
     }
 }
 
+tasks.withType(Sign) {
+    onlyIf {  isRelease && gradle.taskGraph.hasTask("publishLibraryPublicationToMavenRepository")   }
+}
+
 signing {
-    required { isRelease && gradle.taskGraph.hasTask("publishLibraryPublicationToMavenRepository") }
-        sign publishing.publications.library
-    
+    sign publishing.publications.library
 }
 

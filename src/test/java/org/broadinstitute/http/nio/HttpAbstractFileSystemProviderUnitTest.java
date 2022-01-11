@@ -6,6 +6,7 @@ import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -132,7 +133,7 @@ public class HttpAbstractFileSystemProviderUnitTest extends BaseTest {
                 // mismatching Path
                 {http, https.getPath(URI.create("https://example.org/file.txt")), Collections.emptySet(), ProviderMismatchException.class},
                 // non existent file
-                {http, httpPath, Collections.emptySet(), NoSuchFileException.class},
+                {http, httpPath, Collections.emptySet(), FileNotFoundException.class},
                 // UNSUPPORTED BYTE CHANNELS (e.g., writing)
                 // if only an option that it is not supported
                 {http, httpPath, Collections.singleton(StandardOpenOption.WRITE), UnsupportedOperationException.class},

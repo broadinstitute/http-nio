@@ -105,10 +105,6 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
             // convert Path to URI and check it to see if there is a mismatch with the provider
             // afterwards, convert to an URL
             final URL url = checkUri(path.toUri()).toURL();
-            // throw if the URL does not exists
-            if (!HttpUtils.exists(url)) {
-                throw new NoSuchFileException(url.toString());
-            }
             // return a URL SeekableByteChannel
             return new URLSeekableByteChannel(url);
         }

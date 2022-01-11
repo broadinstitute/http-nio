@@ -7,14 +7,17 @@ import org.testng.annotations.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.AccessMode;
 import java.nio.file.FileSystemAlreadyExistsException;
 import java.nio.file.FileSystemNotFoundException;
+import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.ProviderMismatchException;
 import java.nio.file.StandardOpenOption;
 import java.util.Collections;
@@ -29,6 +32,15 @@ public class HttpAbstractFileSystemProviderUnitTest extends BaseTest {
     private static final URI TEST_BASE_URI = URI.create("http://example.com");
 
     private static final Map<String, ?> TEST_ENV = Collections.emptyMap();
+
+    @DataProvider
+    public static Object[][] nonExistantPaths() {
+        return new Object[][]{
+                { Paths.get(URI.create("http://example.org/file.txt"))},
+                { Paths.get(URI.create("https://google.com/bloar"))},
+                { Paths.get(URI.create("http://thisdoesntexist.org/"))}
+        };
+    }
 
 
     @Test
@@ -134,6 +146,15 @@ public class HttpAbstractFileSystemProviderUnitTest extends BaseTest {
             final Set<OpenOption> options,final Class<? extends Throwable> expectedException)
             throws Exception {
         Assert.assertThrows(expectedException, () -> provider.newByteChannel(path, options));
+    }
+
+    @Test(dataProvider = "nonExistantPaths")
+    public void testOpenNonExistantUrl(Path path) throws Exception {
+        try(final InputStream is = Files.newInputStream(path)){
+            Assert.fail("Should have thrown");
+        } catch( IOException e) {
+          // expected
+        }
     }
 
     @DataProvider

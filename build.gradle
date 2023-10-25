@@ -11,10 +11,8 @@ plugins {
     id 'maven-publish'
     id 'signing'
     id 'com.palantir.git-version' version "0.11.0"
+    id 'jacoco'
 }
-
-// Apply the custom jacoco coverage plugin
-apply from: 'gradle/jacoco.coverage.gradle'
 
 group = 'org.broadinstitute'
 
@@ -24,7 +22,6 @@ description = """HTTP/S FileSystem provider for Java NIO.2"""
 
 // library dependencies
 repositories {
-    jcenter()
     mavenCentral()
 }
 
@@ -35,15 +32,15 @@ dependencies {
     implementation "org.slf4j:slf4j-api:" + slf4jVersion
 
     // use TestNG for testing
-    testImplementation "org.testng:testng:6.11"
-    testImplementation "org.mockito:mockito-core:2.8.47"
+    testImplementation 'org.testng:testng:7.7.0'
+    testImplementation 'org.mockito:mockito-core:5.2.0'
     // add SLF4J implementation for testing
     testImplementation "org.slf4j:slf4j-simple:" + slf4jVersion
 }
 
 // for managing the wrapper task
 wrapper {
-    gradleVersion = '6.3'
+    gradleVersion = '8.4'
 }
 
 java {
@@ -55,8 +52,6 @@ tasks.withType(Javadoc) {
     // the title includes the version of the API
     title = "http-nio $version API"
 
-    // add the links to the Java8 API too
-    options.links("http://docs.oracle.com/javase/8/docs/api/")
     // add Java8 optional tags
     options.tags = ["apiNote:a:API Note:",
                     "implSpec:a:Implementation Requirements:",

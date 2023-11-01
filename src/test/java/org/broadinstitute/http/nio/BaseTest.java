@@ -6,7 +6,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Path;
 
@@ -45,12 +46,12 @@ public class BaseTest {
      * @return URL string in GitHub-pages.
      *
      * @throws AssertionError if the URL is malformed (unexpected).
-     * @see #getGithubPagesFileUrl(String)
+     * @see #getGithubPagesFileUri(String)
      */
-    public static URL getGithubPagesFileUrl(final String baseName) {
+    public static URI getGithubPagesFileUri(final String baseName) {
         try {
-            return new URL(getGithubPagesFullUrlName(baseName));
-        } catch (MalformedURLException e) {
+            return new URI(getGithubPagesFullUrlName(baseName));
+        } catch (URISyntaxException e) {
             throw new AssertionError("Unexpected error for GitHub file " + baseName, e);
         }
     }
@@ -88,12 +89,12 @@ public class BaseTest {
      *
      * <p>WARNING: do not use with huge files.
      *
-     * @param httpUrl URL to read.
+     * @param httpUri URL to read.
      *
      * @return byte array containing all the bytes in the file.
      */
-    public static byte[] readAllBytes(final URL httpUrl) throws Exception {
-        final HttpURLConnection connection = (HttpURLConnection) httpUrl.openConnection();
+    public static byte[] readAllBytes(final URI httpUri) throws Exception {
+        final HttpURLConnection connection = (HttpURLConnection) httpUri.toURL().openConnection();
         try {
             // open the connection and the input stream
             // open the connection and try to guess the length of the output

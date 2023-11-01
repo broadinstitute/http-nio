@@ -7,14 +7,21 @@ import java.io.BufferedInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
-import java.net.URLConnection;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.NonWritableChannelException;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
+import java.util.List;
+import java.util.Map;
+
 
 /**
  * Implementation for a {@link SeekableByteChannel} for {@link URL} open as a connection.
@@ -25,13 +32,14 @@ import java.nio.channels.SeekableByteChannel;
  * @author Daniel Gomez-Sanchez (magicDGS)
  * @implNote this seekable byte channel is read-only.
  */
-class URLSeekableByteChannel implements SeekableByteChannel {
+public class HttpSeekableByteChannel implements SeekableByteChannel {
+
 
     private static final long SKIP_DISTANCE = 8 * 1024;
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     // url and proxy for the file
-    private final URL url;
+    private final URI uri;
 
     // current position of the SeekableByteChannel
     private long position = 0;
@@ -39,15 +47,29 @@ class URLSeekableByteChannel implements SeekableByteChannel {
     // the size of the whole file (-1 is not initialized)
     private long size = -1;
 
-    private URLConnection connection = null;
+    private final HttpClient client;
     private ReadableByteChannel channel = null;
     private InputStream backingStream = null;
 
 
-    URLSeekableByteChannel(final URL url) throws IOException {
-        this.url = Utils.nonNull(url, () -> "null URL");
+    private static HttpClient getDefaultClient() {
+        return HttpClient.newBuilder()
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .build();
+    }
+
+    //useful for testing, not generally used
+    HttpSeekableByteChannel(URI uri) throws IOException {
+        this(uri, getDefaultClient());
+    }
+
+    public HttpSeekableByteChannel(final URI uri, final HttpClient client) throws IOException {
+        this.uri = Utils.nonNull(uri, () -> "null URI");
+        this.client = client;
+
         // and instantiate the stream/channel at position 0
-        instantiateChannel(this.position);
+        instantiateChannel(0L);
+
     }
 
     @Override
@@ -73,7 +95,7 @@ class URLSeekableByteChannel implements SeekableByteChannel {
     }
 
     @Override
-    public synchronized URLSeekableByteChannel position(long newPosition) throws IOException {
+    public synchronized HttpSeekableByteChannel position(long newPosition) throws IOException {
         if (newPosition < 0) {
             throw new IllegalArgumentException("Cannot seek a negative position");
         }
@@ -114,24 +136,47 @@ class URLSeekableByteChannel implements SeekableByteChannel {
             throw new ClosedChannelException();
         }
         if (size == -1) {
-            final URLConnection connection = url.openConnection();
-            connection.connect();
-            // try block for always disconnect the connection
+            HttpRequest headRequest = HttpRequest.newBuilder()
+                    .uri(uri)
+                    .method("HEAD", HttpRequest.BodyPublishers.noBody())
+                    .build();
             try {
-                size = connection.getContentLengthLong();
-                // if the size is still -1, it means that it is unavailable
-                if (size == -1) {
-                    throw new IOException("Unable to retrieve content length for " + url);
+                final HttpResponse<?> response = client.send(headRequest, HttpResponse.BodyHandlers.discarding());
+                checkResponse(response, false);
+                final Map<String, List<String>> map = response.headers().map();
+                final List<String> contentLengthStrings = map.get("content-length");
+                if( contentLengthStrings == null || contentLengthStrings.size() != 1){
+                    throw new IOException("Failed to get size of file at " + uri.toString() + "," +
+                            " content-length=" + contentLengthStrings);
+                } else {
+                    size = Long.parseLong(contentLengthStrings.get(0));
                 }
-            } finally {
-                // disconnect if possible
-               if( connection != null) {
-                   HttpUtils.disconnect(connection);
-               }
+            } catch (InterruptedException e) {
+                throw new IOException("Interrupted while trying to get size of file at " + uri.toString() , e);
             }
         }
         return size;
     }
+
+    private void checkResponse(final HttpResponse<?> response, boolean isRangeRequest) throws IOException {
+       int code = response.statusCode();
+       switch (code) {
+               case 200 -> {
+                   if (isRangeRequest) {
+                       throw new IOException("Server returned entire file instead of subrange for " + uri);
+                   }
+               }
+               case 206 -> {
+                   if (!isRangeRequest) {
+                       throw new IOException("Unexpected Partial Content result for request for entire file at " + uri);
+                   }
+               }
+               case 404 -> throw new FileNotFoundException("File not found at " + uri);
+               default -> throw new IOException("Unexpected http response code: " + code + " when requesting " + uri);
+       }
+   }
+
+
 
     @Override
     public SeekableByteChannel truncate(long size) {
@@ -147,35 +192,31 @@ class URLSeekableByteChannel implements SeekableByteChannel {
     public synchronized void close() throws IOException {
         // this also closes the backing stream
         channel.close();
-
-        if( connection != null ) {
-            HttpUtils.disconnect(connection);
-            connection = null;
-        }
     }
 
     // open a readable byte channel for the requested position
-    private synchronized void instantiateChannel(final long position) throws IOException {
+    private synchronized void instantiateChannel(final long position) throws IOException{
+            final HttpRequest.Builder builder = HttpRequest.newBuilder(uri).GET();
+            final boolean isRangeRequest = position != 0;
+            if(isRangeRequest){
+                builder.setHeader("Range", "bytes="+position+"-");
+            }
+            HttpRequest request = builder.build();
+
+        final HttpResponse<InputStream> response;
         try {
-            if( connection == null) {
-                connection = url.openConnection();
-            }
-
-            if (position > 0) {
-                HttpUtils.setRangeRequest(connection, position, -1);
-            }
-
-            //TODO BufferedInputStream might be unecessary
-            backingStream = new BufferedInputStream(connection.getInputStream());
-            channel = Channels.newChannel(backingStream);
-            this.position = position;
-        } catch (final FileNotFoundException ex){
+           response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+        } catch (final FileNotFoundException ex) {
             throw ex;
         } catch (final IOException ex){
-            throw new IOException("Failure while instantiating connection to: " + url.toString() + " at position: " + position, ex);
+            throw new IOException("Failed to connect to " + uri + "at positon: " + position, ex);
+        } catch (final InterruptedException ex){
+            throw new IOException("Interrupted while connecting to " + uri + " at position: " + position, ex);
         }
+        checkResponse(response, isRangeRequest);
+        backingStream = new BufferedInputStream(response.body());
+        channel = Channels.newChannel(backingStream);
+        this.position = position;
     }
-
-
 
 }

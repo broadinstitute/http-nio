@@ -10,7 +10,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
-import java.nio.file.AccessDeniedException;
 import java.nio.file.AccessMode;
 import java.nio.file.FileSystemAlreadyExistsException;
 import java.nio.file.FileSystemNotFoundException;
@@ -159,24 +158,24 @@ public class HttpAbstractFileSystemProviderUnitTest extends BaseTest {
     }
 
     @DataProvider
-    public Object[][] deniedAccess() {
+    public Object[][] readOnly() {
         return new Object[][] {
             {AccessMode.EXECUTE},
             {AccessMode.WRITE}
         };
     }
 
-    @Test(dataProvider= "deniedAccess", expectedExceptions = AccessDeniedException.class)
-    public void testCheckAccessDenied(final AccessMode deniedAcces) throws Exception {
+    @Test(dataProvider= "readOnly", expectedExceptions = UnsupportedOperationException.class)
+    public void testReadOnly(final AccessMode deniedAcces) throws Exception {
         final HttpsFileSystemProvider https = new HttpsFileSystemProvider();
-        final HttpPath path = https.getPath(getGithubPagesFileUrl("file1.txt").toURI());
+        final HttpPath path = https.getPath(getGithubPagesFileUri("file1.txt"));
         https.checkAccess(path, deniedAcces);
     }
 
     @Test
     public void testCheckAccessRead() throws Exception {
         final HttpsFileSystemProvider https = new HttpsFileSystemProvider();
-        final HttpPath path = https.getPath(getGithubPagesFileUrl("file1.txt").toURI());
+        final HttpPath path = https.getPath(getGithubPagesFileUri("file1.txt"));
         // this shouldn't throw
         https.checkAccess(path, AccessMode.READ);
     }
@@ -184,7 +183,7 @@ public class HttpAbstractFileSystemProviderUnitTest extends BaseTest {
     @Test(expectedExceptions = NoSuchFileException.class)
     public void testCheckAccessNoSuchFile() throws Exception {
         final HttpsFileSystemProvider https = new HttpsFileSystemProvider();
-        final HttpPath path = https.getPath(getGithubPagesFileUrl("no_exists.txt").toURI());
+        final HttpPath path = https.getPath(getGithubPagesFileUri("no_exists.txt"));
         https.checkAccess(path, AccessMode.READ);
     }
 

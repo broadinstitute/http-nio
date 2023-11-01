@@ -9,6 +9,7 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.net.UnknownHostException;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Utility class for working with HTTP/S connections and URLs.
@@ -26,7 +27,7 @@ public final class HttpUtils {
     public static final char HTTP_PATH_SEPARATOR_CHAR = '/';
 
     /** Charset for path component of HTTP/S URL. */
-    public static final Charset HTTP_PATH_CHARSET = Charset.forName("UTF-8");
+    public static final Charset HTTP_PATH_CHARSET = StandardCharsets.UTF_8;
 
 
     // request 'HEAD' method

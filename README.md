@@ -1,7 +1,6 @@
 **This project is in a pre-release stage and it is subject to change without warning.**
 
-[![Build Status](https://travis-ci.org/lbergelson/http-nio.svg?branch=master)](https://travis-ci.org/lbergelson/http-nio)
-[![codecov](https://codecov.io/gh/lbergelson/http-nio/branch/master/graph/badge.svg)](https://codecov.io/gh/lbergelson/http-nio)
+[![Java CI with Gradle](https://github.com/broadinstitute/http-nio/actions/workflows/test.yml/badge.svg?branch=master&event=push)](https://github.com/broadinstitute/http-nio/actions/workflows/test.yml)
 [![Language](http://img.shields.io/badge/language-java-brightgreen.svg)](https://www.java.com/)
 [![License (3-Clause BSD)](https://img.shields.io/badge/license-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 

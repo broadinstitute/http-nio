@@ -16,7 +16,7 @@ public final class HttpsFileSystemProvider extends HttpAbstractFileSystemProvide
      * @return {@link #SCHEME}.
      */
     @Override
-    public final String getScheme() {
+    public String getScheme() {
         return SCHEME;
     }
 }

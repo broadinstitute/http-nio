@@ -35,9 +35,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author Daniel Gomez-Sanchez (magicDGS)
  */
 abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
-    private static HttpFileSystemProviderSettings settings;
+    private static HttpFileSystemProviderSettings settings = HttpFileSystemProviderSettings.DEFAULT_SETTINGS;
 
-    // map of authorities and FileSystem - using a concurrent implementation for being tread-safe
+    // map of authorities and FileSystem - using a concurrent implementation for thread-safety
     private final Map<String, HttpFileSystem> fileSystems = new ConcurrentHashMap<>();
 
     /**
@@ -219,10 +219,13 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
         return this.getClass().getSimpleName();
     }
 
+    /** @return the current settings */
     public static synchronized HttpFileSystemProviderSettings getSettings(){
         return settings;
     }
 
+    /** override the existing settings
+     * @param settings the new settings object to use*/
     public static synchronized void setSettings(HttpFileSystemProviderSettings settings){
         HttpAbstractFileSystemProvider.settings = settings;
     }

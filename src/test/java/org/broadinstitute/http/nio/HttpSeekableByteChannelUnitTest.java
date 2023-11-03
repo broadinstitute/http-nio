@@ -17,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Stream;
@@ -26,12 +27,28 @@ public class HttpSeekableByteChannelUnitTest extends BaseTest {
     public static final String BIG_TXT_GOOGLE = "https://storage.googleapis.com/hellbender/test/resources/nio/big.txt";
     public static final String BIG_TXT_LOCAL = "testdata/big.txt";
 
+    public static final HttpFileSystemProviderSettings FIVE_RETRIES_EVERY_CASE = new HttpFileSystemProviderSettings(null, false, 10, 4, 4, Collections.emptyList(), e -> true);
+
     private SeekableByteChannel getChannel(URI uri) throws IOException {
         return new HttpSeekableByteChannel(uri);
     }
+
     @Test(expectedExceptions = FileNotFoundException.class)
     public void testNonExistentUrl() throws Exception {
         getChannel(getGithubPagesFileUri("not_existent.txt"));
+    }
+
+    @Test
+    public void testNonExistentUrlForcedRetry404() throws Exception {
+        try(
+            SeekableByteChannel channel1 = new HttpSeekableByteChannel(new URI("https://www.ft.com/__origami/service/image/v2/images/raw/"));// FIVE_RETRIES_EVERY_CASE);
+            SeekableByteChannel channel2 = new HttpSeekableByteChannel(new URI("https://www.reuters.com/resizer/"))
+        ) {
+            //
+        } catch (final IOException e) {
+            System.out.println(e);
+            Assert.assertTrue(e.getCause().getMessage().contains("All 4 retries failed"));
+        }
     }
 
     @Test

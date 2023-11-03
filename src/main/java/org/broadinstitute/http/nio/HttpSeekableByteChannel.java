@@ -4,15 +4,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URI;
 import java.net.URL;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpClient;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.ClosedChannelException;
@@ -51,6 +52,8 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
     private ReadableByteChannel channel = null;
     private InputStream backingStream = null;
 
+    private HttpFileSystemProviderSettings settings = null;
+
 
     private static HttpClient getDefaultClient() {
         return HttpClient.newBuilder()
@@ -63,7 +66,7 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
         this(uri, getDefaultClient());
     }
 
-    public HttpSeekableByteChannel(final URI uri, final HttpClient client) throws IOException {
+    public HttpSeekableByteChannel(final URI uri, final HttpClient client, HttpFileSystemProviderSettings settings) throws IOException {
         this.uri = Utils.nonNull(uri, () -> "null URI");
         this.client = client;
 
@@ -74,11 +77,27 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
 
     @Override
     public synchronized int read(final ByteBuffer dst) throws IOException {
-        final int read = channel.read(dst);
-        if( read != -1) {
-            this.position += read;
+        final HTTPRetryHandler retryHandler =
+                new HTTPRetryHandler(settings);
+
+        while (true) {
+            try {
+                final int read = channel.read(dst);
+                if (read != -1) {
+                    this.position += read;
+                }
+                return read;
+            } catch (final IOException ex) {
+                try {
+                    if (retryHandler.handleStorageException(ex)) {
+                        logger.warn("Retrying connection to {} at position {} due to error: {}",
+                                uri, position, ex.getMessage());
+                    }
+                } catch (IOException e) {
+                    throw new IOException("Failure while instantiating connection to: " + url.toString() + " at position: " + position, ex);
+                }
+            }
         }
-        return read;
     }
 
     @Override
@@ -102,22 +121,22 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
         if (!isOpen()) {
             throw new ClosedChannelException();
         }
-        if (this.position == newPosition){
+        if (this.position == newPosition) {
             //nothing to do here
         } else if (this.position < newPosition && newPosition - this.position < SKIP_DISTANCE) {
             // if the current position is before but nearby do not open a new connection
             // but skip the bytes until the new position
             long bytesToSkip = newPosition - this.position;
-            while(bytesToSkip > 0) {
+            while (bytesToSkip > 0) {
                 final long skipped = backingStream.skip(bytesToSkip);
-                if( skipped <= 0){
+                if (skipped <= 0) {
                     throw new IOException("Failed to skip any bytes while moving from " + this.position + " to " + newPosition);
                 }
                 bytesToSkip -= skipped;
             }
             logger.debug("Skipped {} bytes out of {} for setting position to {} (previously on {})",
                     bytesToSkip, bytesToSkip, newPosition, position);
-        } else  {
+        } else {
             // in this case, we require to re-instantiate the channel
             // opening at the new position - and closing the previous
             close();
@@ -132,50 +151,65 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
 
     @Override
     public synchronized long size() throws IOException {
-        if (!isOpen()) {
-            throw new ClosedChannelException();
-        }
-        if (size == -1) {
-            HttpRequest headRequest = HttpRequest.newBuilder()
-                    .uri(uri)
-                    .method("HEAD", HttpRequest.BodyPublishers.noBody())
-                    .build();
+        final HTTPRetryHandler retryHandler =
+                new HTTPRetryHandler(getRetryHandlerSettings());
+
+        while (true) {
             try {
-                final HttpResponse<?> response = client.send(headRequest, HttpResponse.BodyHandlers.discarding());
-                checkResponse(response, false);
-                final Map<String, List<String>> map = response.headers().map();
-                final List<String> contentLengthStrings = map.get("content-length");
-                if( contentLengthStrings == null || contentLengthStrings.size() != 1){
-                    throw new IOException("Failed to get size of file at " + uri.toString() + "," +
-                            " content-length=" + contentLengthStrings);
-                } else {
-                    size = Long.parseLong(contentLengthStrings.get(0));
+                if (!isOpen()) {
+                    throw new ClosedChannelException();
                 }
-            } catch (InterruptedException e) {
-                throw new IOException("Interrupted while trying to get size of file at " + uri.toString() , e);
+                if (size == -1) {
+                    HttpRequest headRequest = HttpRequest.newBuilder()
+                            .uri(uri)
+                            .method("HEAD", HttpRequest.BodyPublishers.noBody())
+                            .build();
+                    try {
+                        final HttpResponse<?> response = client.send(headRequest, HttpResponse.BodyHandlers.discarding());
+                        checkResponse(response, false);
+                        final Map<String, List<String>> map = response.headers().map();
+                        final List<String> contentLengthStrings = map.get("content-length");
+                        if (contentLengthStrings == null || contentLengthStrings.size() != 1) {
+                            throw new IOException("Failed to get size of file at " + uri.toString() + "," +
+                                    " content-length=" + contentLengthStrings);
+                        } else {
+                            size = Long.parseLong(contentLengthStrings.get(0));
+                        }
+                    } catch (InterruptedException e) {
+                        throw new IOException("Interrupted while trying to get size of file at " + uri.toString(), e);
+                    }
+                }
+                return size;
+            } catch (final IOException ex) {
+                try {
+                    if (retryHandler.handleStorageException(ex, connection)) {
+                        logger.warn("Retrying connection to {} at position {} due to error: {}",
+                                url, position, ex.getMessage());
+                    }
+                } catch (IOException e) {
+                    throw new IOException("Failure while instantiating connection to: " + url.toString() + " at position: " + position, ex);
+                }
             }
         }
-        return size;
     }
 
     private void checkResponse(final HttpResponse<?> response, boolean isRangeRequest) throws IOException {
-       int code = response.statusCode();
-       switch (code) {
-               case 200 -> {
-                   if (isRangeRequest) {
-                       throw new IOException("Server returned entire file instead of subrange for " + uri);
-                   }
-               }
-               case 206 -> {
-                   if (!isRangeRequest) {
-                       throw new IOException("Unexpected Partial Content result for request for entire file at " + uri);
-                   }
-               }
-               case 404 -> throw new FileNotFoundException("File not found at " + uri);
-               default -> throw new IOException("Unexpected http response code: " + code + " when requesting " + uri);
-       }
-   }
-
+        int code = response.statusCode();
+        switch (code) {
+            case 200 -> {
+                if (isRangeRequest) {
+                    throw new IOException("Server returned entire file instead of subrange for " + uri);
+                }
+            }
+            case 206 -> {
+                if (!isRangeRequest) {
+                    throw new IOException("Unexpected Partial Content result for request for entire file at " + uri);
+                }
+            }
+            case 404 -> throw new FileNotFoundException("File not found at " + uri);
+            default -> throw new IOException("Unexpected http response code: " + code + " when requesting " + uri);
+        }
+    }
 
 
     @Override
@@ -195,28 +229,45 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
     }
 
     // open a readable byte channel for the requested position
-    private synchronized void instantiateChannel(final long position) throws IOException{
-            final HttpRequest.Builder builder = HttpRequest.newBuilder(uri).GET();
-            final boolean isRangeRequest = position != 0;
-            if(isRangeRequest){
-                builder.setHeader("Range", "bytes="+position+"-");
+    private synchronized void instantiateChannel(final long position) throws IOException {
+        //This thing will loop
+        final HTTPRetryHandler retryHandler =
+                new HTTPRetryHandler(getRetryHandlerSettings());
+
+        while (true) {
+            try {
+                final HttpRequest.Builder builder = HttpRequest.newBuilder(uri).GET();
+                final boolean isRangeRequest = position != 0;
+                if (isRangeRequest) {
+                    builder.setHeader("Range", "bytes=" + position + "-");
+                }
+                HttpRequest request = builder.build();
+
+                final HttpResponse<InputStream> response;
+                try {
+                    response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+                } catch (final FileNotFoundException ex) {
+                    throw ex;
+                } catch (final IOException ex) {
+                    throw new IOException("Failed to connect to " + uri + "at positon: " + position, ex);
+                } catch (final InterruptedException ex) {
+                    throw new IOException("Interrupted while connecting to " + uri + " at position: " + position, ex);
+                }
+                checkResponse(response, isRangeRequest);
+                backingStream = new BufferedInputStream(response.body());
+                channel = Channels.newChannel(backingStream);
+                this.position = position;
+            } catch (final IOException ex) {
+                try {
+                    if (retryHandler.handleStorageException(ex, connection)) {
+                        logger.warn("Retrying connection to {} at position {} due to error: {}",
+                                url, position, ex.getMessage());
+                    }
+                } catch (IOException e) {
+                    throw new IOException("Failure while instantiating connection to: " + url.toString() + " at position: " + position, ex);
+                }
+
             }
-            HttpRequest request = builder.build();
-
-        final HttpResponse<InputStream> response;
-        try {
-           response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
-        } catch (final FileNotFoundException ex) {
-            throw ex;
-        } catch (final IOException ex){
-            throw new IOException("Failed to connect to " + uri + "at positon: " + position, ex);
-        } catch (final InterruptedException ex){
-            throw new IOException("Interrupted while connecting to " + uri + " at position: " + position, ex);
         }
-        checkResponse(response, isRangeRequest);
-        backingStream = new BufferedInputStream(response.body());
-        channel = Channels.newChannel(backingStream);
-        this.position = position;
     }
-
 }

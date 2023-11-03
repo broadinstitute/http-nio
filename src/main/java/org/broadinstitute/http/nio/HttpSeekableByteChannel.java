@@ -32,7 +32,7 @@ import java.util.Map;
  * @author Daniel Gomez-Sanchez (magicDGS)
  * @implNote this seekable byte channel is read-only.
  */
-public class NewURLSeekableByteChannel implements SeekableByteChannel {
+public class HttpSeekableByteChannel implements SeekableByteChannel {
 
 
     private static final long SKIP_DISTANCE = 8 * 1024;
@@ -47,24 +47,25 @@ public class NewURLSeekableByteChannel implements SeekableByteChannel {
     // the size of the whole file (-1 is not initialized)
     private long size = -1;
 
-    private HttpClient client = null;
+    private final HttpClient client;
     private ReadableByteChannel channel = null;
     private InputStream backingStream = null;
 
 
-    NewURLSeekableByteChannel(String string) throws IOException, URISyntaxException {
-        this(new URI(string));
-    }
-
-    NewURLSeekableByteChannel(URL url) throws URISyntaxException, IOException {
-        this(url.toURI());
-    }
-
-    NewURLSeekableByteChannel(final URI uri) throws IOException {
-        this.uri = Utils.nonNull(uri, () -> "null URI");
-        this.client = HttpClient.newBuilder()
+    private static HttpClient getDefaultClient() {
+        return HttpClient.newBuilder()
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .build();
+    }
+
+    //useful for testing, not generally used
+    HttpSeekableByteChannel(URI uri) throws IOException {
+        this(uri, getDefaultClient());
+    }
+
+    public HttpSeekableByteChannel(final URI uri, final HttpClient client) throws IOException {
+        this.uri = Utils.nonNull(uri, () -> "null URI");
+        this.client = client;
 
         // and instantiate the stream/channel at position 0
         instantiateChannel(0L);
@@ -94,7 +95,7 @@ public class NewURLSeekableByteChannel implements SeekableByteChannel {
     }
 
     @Override
-    public synchronized NewURLSeekableByteChannel position(long newPosition) throws IOException {
+    public synchronized HttpSeekableByteChannel position(long newPosition) throws IOException {
         if (newPosition < 0) {
             throw new IllegalArgumentException("Cannot seek a negative position");
         }

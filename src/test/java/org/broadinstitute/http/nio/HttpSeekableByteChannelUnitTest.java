@@ -6,8 +6,8 @@ import org.testng.annotations.Test;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.NonWritableChannelException;
@@ -21,20 +21,22 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Stream;
 
-@Test
-public abstract class HttpSeekableByteChannelUnitTest extends BaseTest {
+public class HttpSeekableByteChannelUnitTest extends BaseTest {
     public static final String LARGE_FILE_ON_GOOGLE = "https://storage.googleapis.com/hellbender/test/resources/benchmark/CEUTrio.HiSeq.WEx.b37.NA12892.bam";
     public static final String BIG_TXT_GOOGLE = "https://storage.googleapis.com/hellbender/test/resources/nio/big.txt";
     public static final String BIG_TXT_LOCAL = "testdata/big.txt";
 
+    private SeekableByteChannel getChannel(URI uri) throws IOException {
+        return new HttpSeekableByteChannel(uri);
+    }
     @Test(expectedExceptions = FileNotFoundException.class)
     public void testNonExistentUrl() throws Exception {
-        getChannel(getGithubPagesFileUrl("not_existent.txt"));
+        getChannel(getGithubPagesFileUri("not_existent.txt"));
     }
 
     @Test
     public void testNonWritableChannelExceptions() throws Exception {
-        try (final SeekableByteChannel channel = getChannel(getGithubPagesFileUrl("file1.txt"))) {
+        try (final SeekableByteChannel channel = getChannel(getGithubPagesFileUri("file1.txt"))) {
             // cannot write
             Assert.assertThrows(NonWritableChannelException.class,
                     () -> channel.write(ByteBuffer.allocate(10)));
@@ -45,7 +47,7 @@ public abstract class HttpSeekableByteChannelUnitTest extends BaseTest {
 
     @Test(dataProvider = "getDocsFilesForTesting", dataProviderClass = GitHubResourcesIntegrationTest.class)
     public void testSize(final String fileName) throws Exception {
-        final URL urlFile = getGithubPagesFileUrl(fileName);
+        final URI urlFile = getGithubPagesFileUri(fileName);
         final Path localFile = getLocalDocsFilePath(fileName);
         try (final SeekableByteChannel urlChannel = getChannel(urlFile);
              final SeekableByteChannel localChannel = Files.newByteChannel(localFile)) {
@@ -55,7 +57,7 @@ public abstract class HttpSeekableByteChannelUnitTest extends BaseTest {
 
     @Test(dataProvider = "getDocsFilesForTesting", dataProviderClass = GitHubResourcesIntegrationTest.class)
     public void testSizeAfterRead(final String fileName) throws Exception {
-        final URL urlFile = getGithubPagesFileUrl(fileName);
+        final URI urlFile = getGithubPagesFileUri(fileName);
         final Path localFile = getLocalDocsFilePath(fileName);
         try (final SeekableByteChannel urlChannel = getChannel(urlFile);
              final SeekableByteChannel localChannel = Files.newByteChannel(localFile)) {
@@ -72,7 +74,7 @@ public abstract class HttpSeekableByteChannelUnitTest extends BaseTest {
 
     @Test(dataProvider = "getDocsFilesForTesting", dataProviderClass = GitHubResourcesIntegrationTest.class)
     public void testCachedSize(final String fileName) throws Exception {
-        final URL urlFile = getGithubPagesFileUrl(fileName);
+        final URI urlFile = getGithubPagesFileUri(fileName);
         final Path localFile = getLocalDocsFilePath(fileName);
         try (final SeekableByteChannel urlChannel = getChannel(urlFile);
              final SeekableByteChannel localChannel = Files.newByteChannel(localFile)) {
@@ -93,7 +95,7 @@ public abstract class HttpSeekableByteChannelUnitTest extends BaseTest {
     @Test
     public void testGetPosition() throws Exception {
         // open channel
-        try (final SeekableByteChannel channel = getChannel(getGithubPagesFileUrl("file1.txt"))) {
+        try (final SeekableByteChannel channel = getChannel(getGithubPagesFileUri("file1.txt"))) {
             int currentPosition = 0;
             Assert.assertEquals(channel.position(), currentPosition);
             final int bufferSize = Math.round(channel.size() / 10f);
@@ -108,10 +110,10 @@ public abstract class HttpSeekableByteChannelUnitTest extends BaseTest {
 
     @Test(expectedExceptions = IllegalArgumentException.class)
     public void testIllegalPosition() throws Exception {
-        getChannel(getGithubPagesFileUrl("file1.txt")).position(-1);
+        try(SeekableByteChannel channel = getChannel(getGithubPagesFileUri("file1.txt"))) {
+            channel.position(-1);
+        }
     }
-
-    protected abstract SeekableByteChannel getChannel(URL url) throws IOException, URISyntaxException;
 
     protected static void testReadSize(final int size,
                                        final SeekableByteChannel actual, final SeekableByteChannel expected)
@@ -146,16 +148,16 @@ public abstract class HttpSeekableByteChannelUnitTest extends BaseTest {
         return Stream.of(GitHubResourcesIntegrationTest.getDocsFilesForTesting())
                 .map(data -> (String) data[0]).map(fileName ->
                         new Object[]{
-                                getGithubPagesFileUrl(fileName), // URL
+                                getGithubPagesFileUri(fileName), // URL
                                 10,                              // position to seek
                                 getLocalDocsFilePath(fileName)   // local file
                         }).iterator();
     }
 
     @Test(dataProvider = "seekData")
-    public void testSeekBeforeRead(final URL testUrl, final long position, final Path localFile)
+    public void testSeekBeforeRead(final URI testURI, final long position, final Path localFile)
             throws Exception {
-        try (final SeekableByteChannel actual = getChannel(testUrl);
+        try (final SeekableByteChannel actual = getChannel(testURI);
              final SeekableByteChannel expected = Files.newByteChannel(localFile)) {
             HttpSeekableByteChannelUnitTest.testReadSize((int) expected.size(),
                     actual.position(position),
@@ -164,9 +166,9 @@ public abstract class HttpSeekableByteChannelUnitTest extends BaseTest {
     }
 
     @Test(dataProvider = "seekData")
-    public void testSeekToBeginning(final URL testUrl, final long position, final Path localFile)
+    public void testSeekToBeginning(final URI testURI, final long position, final Path localFile)
             throws Exception {
-        try (final SeekableByteChannel actual = getChannel(testUrl);
+        try (final SeekableByteChannel actual = getChannel(testURI);
              final SeekableByteChannel expected = Files.newByteChannel(localFile)) {
             HttpSeekableByteChannelUnitTest.testReadSize((int) expected.size(),
                     // first position and then come back to 0
@@ -176,9 +178,9 @@ public abstract class HttpSeekableByteChannelUnitTest extends BaseTest {
     }
 
     @Test(dataProvider = "seekData")
-    public void testSeekToSamePosition(final URL testUrl, final long position, final Path localFile)
+    public void testSeekToSamePosition(final URI testURI, final long position, final Path localFile)
             throws Exception {
-        try (final SeekableByteChannel actual = getChannel(testUrl);
+        try (final SeekableByteChannel actual = getChannel(testURI);
              final SeekableByteChannel expected = Files.newByteChannel(localFile)) {
             HttpSeekableByteChannelUnitTest.testReadSize((int) expected.size(),
                     // seek twice to the same position is equal to seek only once
@@ -188,9 +190,9 @@ public abstract class HttpSeekableByteChannelUnitTest extends BaseTest {
     }
 
     @Test(dataProvider = "seekData")
-    public void testSeekShouldReopen(final URL testUrl, final long position, final Path localFile)
+    public void testSeekShouldReopen(final URI testURI, final long position, final Path localFile)
             throws Exception {
-        try (final SeekableByteChannel actual = getChannel(testUrl);
+        try (final SeekableByteChannel actual = getChannel(testURI);
              final SeekableByteChannel expected = Files.newByteChannel(localFile)) {
             HttpSeekableByteChannelUnitTest.testReadSize((int) expected.size(),
                     // seek first to 10 bytes more, and then to the requested position
@@ -202,7 +204,7 @@ public abstract class HttpSeekableByteChannelUnitTest extends BaseTest {
     @Test
     public void testClose() throws Exception {
         // open channel
-        final SeekableByteChannel channel = getChannel(getGithubPagesFileUrl("file1.txt"));
+        final SeekableByteChannel channel = getChannel(getGithubPagesFileUri("file1.txt"));
         Assert.assertTrue(channel.isOpen());
         // close channel
         channel.close();
@@ -220,8 +222,8 @@ public abstract class HttpSeekableByteChannelUnitTest extends BaseTest {
 
     @Test
     public void testPositionOnGoogleFile() throws IOException, URISyntaxException {
-        URL url = new URL(LARGE_FILE_ON_GOOGLE);
-        try (SeekableByteChannel channel = getChannel(url)) {
+        URI URI = new URI(LARGE_FILE_ON_GOOGLE);
+        try (SeekableByteChannel channel = getChannel(URI)) {
             channel.position(10000);
             channel.read(ByteBuffer.allocate(100));
         }
@@ -230,8 +232,8 @@ public abstract class HttpSeekableByteChannelUnitTest extends BaseTest {
     @Test(timeOut = 10_000L)
     //time out if it's taking over 10 seconds to read, that indicates we're probably not skipping correctly
     public void testReadAtEndOfLargeFileIsFast() throws IOException, URISyntaxException {
-        URL url = new URL(LARGE_FILE_ON_GOOGLE);
-        try (SeekableByteChannel channel = getChannel(url)) {
+        URI URI = new URI(LARGE_FILE_ON_GOOGLE);
+        try (SeekableByteChannel channel = getChannel(URI)) {
             long size = channel.size();
             Assert.assertEquals(size, 31710132189L);
             channel.position(size - 200);
@@ -246,8 +248,8 @@ public abstract class HttpSeekableByteChannelUnitTest extends BaseTest {
 
     @Test(dataProvider = "stepSize")
     public void testDataIsConsistentForward(int stepSize) throws IOException, URISyntaxException {
-        URL url = new URL(BIG_TXT_GOOGLE);
-        try (final SeekableByteChannel remote = getChannel(url);
+        URI URI = new URI(BIG_TXT_GOOGLE);
+        try (final SeekableByteChannel remote = getChannel(URI);
              final SeekableByteChannel local = Files.newByteChannel(Paths.get(BIG_TXT_LOCAL))) {
             while (remote.position() < remote.size()) {
                 System.out.println("pos: " + remote.position() + " size: " + remote.size());
@@ -269,9 +271,9 @@ public abstract class HttpSeekableByteChannelUnitTest extends BaseTest {
 
     @Test(dataProvider = "steps")
     public void testDataIsConsistentWhileSeeking(List<Integer> positions) throws IOException, URISyntaxException {
-        URL url = new URL(BIG_TXT_GOOGLE);
+        URI URI = new URI(BIG_TXT_GOOGLE);
         final int readlength = 100;
-        try (final SeekableByteChannel remote = getChannel(url);
+        try (final SeekableByteChannel remote = getChannel(URI);
              final SeekableByteChannel local = Files.newByteChannel(Paths.get(BIG_TXT_LOCAL))) {
             for (int position : positions) {
                 remote.position(position);

@@ -2,7 +2,7 @@ package org.broadinstitute.http.nio;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URL;
+import java.net.http.HttpClient;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.AccessMode;
@@ -23,6 +23,7 @@ import java.nio.file.attribute.FileAttributeView;
 import java.nio.file.attribute.FileTime;
 import java.nio.file.spi.FileSystemProvider;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -103,19 +104,27 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
         if (options.isEmpty() ||
                 (options.size() == 1 && options.contains(StandardOpenOption.READ))) {
             // convert Path to URI and check it to see if there is a mismatch with the provider
-            // afterwards, convert to an URL
-            final URL url = checkUri(path.toUri()).toURL();
-            // return a URL SeekableByteChannel
-            return new URLSeekableByteChannel(url);
+            final URI uri = path.toUri();
+            checkUri(uri);
+
+            // return an HttpSeekableByteChannel
+            return new HttpSeekableByteChannel(uri, getClient(settings));
         }
         throw new UnsupportedOperationException(
                 String.format("Only %s is supported for %s, but %s options(s) are provided",
                         StandardOpenOption.READ, this, options));
     }
 
+    private static HttpClient getClient(final HttpFileSystemProviderSettings settings) {
+        return HttpClient.newBuilder()
+                .followRedirects(settings.redirect())
+                .connectTimeout(settings.timeout())
+                .build();
+    }
+
     @Override
     public final DirectoryStream<Path> newDirectoryStream(final Path dir,
-            final DirectoryStream.Filter<? super Path> filter) throws IOException {
+            final DirectoryStream.Filter<? super Path> filter) {
         throw new UnsupportedOperationException("Not implemented");
     }
 
@@ -168,18 +177,12 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
         Utils.nonNull(path, () -> "null path");
         // get the URI (use also for exception messages)
         final URI uri = checkUri(path.toUri());
-        if (!HttpUtils.exists(uri.toURL())) {
+        if (!HttpUtils.exists(uri, getClient(settings))) {
             throw new NoSuchFileException(uri.toString());
         }
         for (AccessMode access : modes) {
-            switch (access) {
-                case READ:
-                    break;
-                case WRITE:
-                case EXECUTE:
-                    throw new AccessDeniedException(uri.toString());
-                default:
-                    throw new UnsupportedOperationException("Unsupported access mode: " + access);
+            if (Objects.requireNonNull(access) != AccessMode.READ) {
+                throw new UnsupportedOperationException("Unsupported access mode: " + access);
             }
         }
     }

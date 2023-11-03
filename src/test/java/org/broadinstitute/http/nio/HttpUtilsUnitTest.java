@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
+import java.net.http.HttpClient;
 
 /**
  * @author Daniel Gomez-Sanchez (magicDGS)
@@ -50,16 +51,16 @@ public class HttpUtilsUnitTest extends BaseTest {
 
     @Test(dataProvider = "getDocsFilesForTesting", dataProviderClass = GitHubResourcesIntegrationTest.class)
     public void testExistingUrls(final String fileName) throws IOException {
-        Assert.assertTrue(HttpUtils.exists(getGithubPagesFileUrl(fileName)));
+        Assert.assertTrue(HttpUtils.exists(getGithubPagesFileUri(fileName), HttpClient.newHttpClient()));
     }
 
     @DataProvider
     public Object[][] nonExistantUrlStrings() {
         return new Object[][] {
                 // unknown host
-                {"http://www.unknown_host.com"},
+                {"http://www.doesntexist.invalid"},
                 // non existant resource
-                {"http://www.example.com/non_existant.html"}
+                {"http://www.example.com/nonexistant.html"}
         };
     }
 
@@ -67,7 +68,7 @@ public class HttpUtilsUnitTest extends BaseTest {
     // probably other home internet providers fail too
     @Test(dataProvider = "nonExistantUrlStrings")
     public void testNonExistingUrl(final String urlString) throws IOException {
-        final URL nonExistant = URI.create(urlString).toURL();
-        Assert.assertFalse(HttpUtils.exists(nonExistant));
+        final URI nonExistant = URI.create(urlString);
+            Assert.assertFalse(HttpUtils.exists(nonExistant, HttpClient.newHttpClient()));
     }
 }

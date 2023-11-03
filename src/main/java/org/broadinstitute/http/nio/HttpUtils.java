@@ -4,12 +4,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.ConnectException;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.UnknownHostException;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.channels.UnresolvedAddressException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AccessDeniedException;
 
 /**
  * Utility class for working with HTTP/S connections and URLs.
@@ -72,21 +79,36 @@ public final class HttpUtils {
      *
      * @throws IOException if an I/O error occurs.
      */
-    public static boolean exists(final URL url) throws IOException {
-        Utils.nonNull(url, () -> "null url");
-        final HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    public static boolean exists(final URI uri, HttpClient client) throws IOException {
+        Utils.nonNull(uri, () -> "null uri");
+        final HttpRequest request = HttpRequest.newBuilder(uri)
+                .method("HEAD", HttpRequest.BodyPublishers.noBody())
+                .build();
         try {
-            conn.setRequestMethod(HEAD_REQUEST_METHOD);
-            return conn.getResponseCode() == HttpURLConnection.HTTP_OK;
-        } catch (final UnknownHostException e) {
-            // TODO - check if other exceptions could mean that the URL does not exists (https://github.com/magicDGS/jsr203-http/issues/32)
-            // UnknownHostException throws if the host does not exists
-            return false;
-        } finally {
-            conn.disconnect();
+            final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            return switch (response.statusCode()) {
+                case 200 -> true;
+                case 404 -> false; //doesn't exist
+                case 401 | 403 | 407 -> throw new AccessDeniedException("Access was denied to " + uri
+                        + "\nHttp status: " + response.statusCode()
+                        + "\n" + response.body());
+                default -> throw new IOException("Unexpected response from " + uri
+                        + "\nHttp status: " + response.statusCode()
+                        + "\n" + response.body());
+            };
+        } catch (ConnectException e){
+            Throwable current = e;
+            while(current.getCause()  != null) {
+                current = current.getCause();
+                if( current instanceof UnresolvedAddressException) {
+                    return false;
+                }
+            }
+            throw e;
+        } catch (InterruptedException e) {
+            throw new RuntimeException("Connection thread was unexpectedly interrupted while checking existence of "+ uri +".", e);
         }
     }
-
     /**
      * Request a range of bytes for a {@link URLConnection}.
      *

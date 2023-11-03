@@ -42,5 +42,12 @@ public class Utils {
         public ShouldNotHappenException(final Throwable e) {
             super("Should not happen", e);
         }
+
+        /**
+         * Constructor.
+         */
+        public ShouldNotHappenException(final String msg) {
+            super(msg);
+        }
     }
 }

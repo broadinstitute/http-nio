@@ -39,6 +39,9 @@ dependencies {
     testImplementation "org.mockito:mockito-core:2.8.47"
     // add SLF4J implementation for testing
     testImplementation "org.slf4j:slf4j-simple:" + slf4jVersion
+    jacoco {
+        toolVersion = "0.8.6"
+    }
 }
 
 // for managing the wrapper task

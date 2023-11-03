@@ -4,7 +4,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
@@ -43,6 +42,8 @@ class URLSeekableByteChannel implements SeekableByteChannel {
     private ReadableByteChannel channel = null;
     private InputStream backingStream = null;
 
+    private HttpFileSystemProviderSettings settings = null;
+
 
     URLSeekableByteChannel(final URL url) throws IOException {
         this.url = Utils.nonNull(url, () -> "null URL");
@@ -50,13 +51,44 @@ class URLSeekableByteChannel implements SeekableByteChannel {
         instantiateChannel(this.position);
     }
 
+    // Override constructor for testing purposes
+    URLSeekableByteChannel(final URL url, final HttpFileSystemProviderSettings settingsOverride) throws IOException {
+        this.url = Utils.nonNull(url, () -> "null URL");
+        this.settings = settingsOverride;
+        // and instantiate the stream/channel at position 0
+        instantiateChannel(this.position);
+    }
+
+    private HttpFileSystemProviderSettings getRetryHandlerSettings() {
+        if (settings == null) {
+            return HttpAbstractFileSystemProvider.getSettings();
+        }
+        return settings;
+    }
+
     @Override
     public synchronized int read(final ByteBuffer dst) throws IOException {
-        final int read = channel.read(dst);
-        if( read != -1) {
-            this.position += read;
+        final HTTPRetryHandler retryHandler =
+                new HTTPRetryHandler(getRetryHandlerSettings());
+
+        while (true) {
+            try {
+                final int read = channel.read(dst);
+                if (read != -1) {
+                    this.position += read;
+                }
+                return read;
+            } catch (final IOException ex) {
+                try {
+                    if (retryHandler.handleStorageException(ex, connection)) {
+                        logger.warn("Retrying connection to {} at position {} due to error: {}",
+                                url, position, ex.getMessage());
+                    }
+                } catch (IOException e) {
+                    throw new IOException("Failure while instantiating connection to: " + url.toString() + " at position: " + position, ex);
+                }
+            }
         }
-        return read;
     }
 
     @Override
@@ -110,27 +142,43 @@ class URLSeekableByteChannel implements SeekableByteChannel {
 
     @Override
     public synchronized long size() throws IOException {
-        if (!isOpen()) {
-            throw new ClosedChannelException();
-        }
-        if (size == -1) {
-            final URLConnection connection = url.openConnection();
-            connection.connect();
-            // try block for always disconnect the connection
+        final HTTPRetryHandler retryHandler =
+                new HTTPRetryHandler(getRetryHandlerSettings());
+
+        while (true) {
             try {
-                size = connection.getContentLengthLong();
-                // if the size is still -1, it means that it is unavailable
-                if (size == -1) {
-                    throw new IOException("Unable to retrieve content length for " + url);
+                if (!isOpen()) {
+                    throw new ClosedChannelException();
                 }
-            } finally {
-                // disconnect if possible
-               if( connection != null) {
-                   HttpUtils.disconnect(connection);
-               }
+                if (size == -1) {
+                    final URLConnection connection = url.openConnection();
+                    connection.connect();
+                    // try block for always disconnect the connection
+                    try {
+                        size = connection.getContentLengthLong();
+                        // if the size is still -1, it means that it is unavailable
+                        if (size == -1) {
+                            throw new IOException("Unable to retrieve content length for " + url);
+                        }
+                    } finally {
+                        // disconnect if possible
+                        if (connection != null) {
+                            HttpUtils.disconnect(connection);
+                        }
+                    }
+                }
+                return size;
+            } catch (final IOException ex) {
+                try {
+                    if (retryHandler.handleStorageException(ex, connection)) {
+                        logger.warn("Retrying connection to {} at position {} due to error: {}",
+                                url, position, ex.getMessage());
+                    }
+                } catch (IOException e) {
+                    throw new IOException("Failure while instantiating connection to: " + url.toString() + " at position: " + position, ex);
+                }
             }
         }
-        return size;
     }
 
     @Override
@@ -156,26 +204,38 @@ class URLSeekableByteChannel implements SeekableByteChannel {
 
     // open a readable byte channel for the requested position
     private synchronized void instantiateChannel(final long position) throws IOException {
-        try {
-            if( connection == null) {
-                connection = url.openConnection();
-            }
 
-            if (position > 0) {
-                HttpUtils.setRangeRequest(connection, position, -1);
-            }
+        //This thing will loop
+        final HTTPRetryHandler retryHandler =
+                new HTTPRetryHandler(getRetryHandlerSettings());
 
-            //TODO BufferedInputStream might be unecessary
-            backingStream = new BufferedInputStream(connection.getInputStream());
-            channel = Channels.newChannel(backingStream);
-            this.position = position;
-        } catch (final FileNotFoundException ex){
-            throw ex;
-        } catch (final IOException ex){
-            throw new IOException("Failure while instantiating connection to: " + url.toString() + " at position: " + position, ex);
+        while (true) {
+            try {
+                if (connection == null) {
+                    connection = url.openConnection();
+                }
+
+                if (position > 0) {
+                    HttpUtils.setRangeRequest(connection, position, -1);
+                }
+
+                //TODO BufferedInputStream might be unecessary
+                backingStream = new BufferedInputStream(connection.getInputStream());
+                channel = Channels.newChannel(backingStream);
+                this.position = position;
+
+                return;
+            } catch (final IOException ex) {
+                try {
+                    if (retryHandler.handleStorageException(ex, connection)) {
+                        logger.warn("Retrying connection to {} at position {} due to error: {}",
+                                url, position, ex.getMessage());
+                    }
+                } catch (IOException e) {
+                    throw new IOException("Failure while instantiating connection to: " + url.toString() + " at position: " + position, ex);
+                }
+
+            }
         }
     }
-
-
-
 }

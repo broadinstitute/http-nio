@@ -35,10 +35,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author Daniel Gomez-Sanchez (magicDGS)
  */
 abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
-    private static HttpFileSystemProviderSettings settings;
+    private static HttpFileSystemProviderSettings settings = HttpFileSystemProviderSettings.DEFAULT_SETTINGS;
 
     // map of authorities and FileSystem - using a concurrent implementation for being tread-safe
     private final Map<String, HttpFileSystem> fileSystems = new ConcurrentHashMap<>();
+
+//    // used only when we create a new instance of CloudStorageFileSystemProvider.
+//    private static StorageOptions futureStorageOptions = StorageOptionsUtil.getDefaultInstance();
 
     /**
      * {@inheritDoc}

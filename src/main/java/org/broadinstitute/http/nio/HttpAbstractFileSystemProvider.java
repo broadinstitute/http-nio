@@ -111,7 +111,7 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
             checkUri(uri);
 
             // return an HttpSeekableByteChannel
-            return new HttpSeekableByteChannel(uri, getClient(settings));
+            return new HttpSeekableByteChannel(uri, getClient(settings), settings);
         }
         throw new UnsupportedOperationException(
                 String.format("Only %s is supported for %s, but %s options(s) are provided",

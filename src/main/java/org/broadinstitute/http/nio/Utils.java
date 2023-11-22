@@ -29,6 +29,12 @@ public class Utils {
         return o;
     }
 
+    public static void validateArg(final boolean condition, final String msg){
+        if (!condition){
+            throw new IllegalArgumentException(msg);
+        }
+    }
+
     /**
      * {@link RuntimeException} for parts of the code that should not happen.
      */

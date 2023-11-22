@@ -34,10 +34,13 @@ import java.util.Map;
 public class HttpSeekableByteChannel implements SeekableByteChannel {
 
     private static final long SKIP_DISTANCE = 8 * 1024;
-    private final Logger logger = LoggerFactory.getLogger(this.getClass());
+    private static final Logger logger = LoggerFactory.getLogger(HttpSeekableByteChannel.class);
 
     // url and proxy for the file
     private final URI uri;
+    private final HttpClient client;
+    private ReadableByteChannel channel = null;
+    private InputStream backingStream = null;
 
     // current position of the SeekableByteChannel
     private long position = 0;
@@ -45,11 +48,9 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
     // the size of the whole file (-1 is not initialized)
     private long size = -1;
 
-    private final HttpClient client;
-    private ReadableByteChannel channel = null;
-    private InputStream backingStream = null;
 
-    private HttpFileSystemProviderSettings settings = null;
+    private final HttpFileSystemProviderSettings settings;
+    private final RetryHandler retryHandler;
 
 
     private static HttpClient getDefaultClient() {
@@ -67,7 +68,7 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
         this.uri = Utils.nonNull(uri, () -> "null URI");
         this.client = client;
         this.settings = settings;
-
+        this.retryHandler = new RetryHandler(settings.retrySettings(), uri);
         // and instantiate the stream/channel at position 0
         instantiateChannel(0L);
 
@@ -76,7 +77,7 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
 
     @Override
     public synchronized int read(final ByteBuffer dst) throws IOException {
-        return runWithRetries( () -> {
+        return retryHandler.runWithRetries( () -> {
                 final int read = channel.read(dst);
                 if (read != -1) {
                     this.position += read;
@@ -109,7 +110,8 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
         if (this.position == newPosition) {
             //nothing to do here
         } else if (this.position < newPosition && newPosition - this.position < SKIP_DISTANCE) {
-            //TODO this case is special since it messes up the state of the stream if it fails.
+            //This case is special since it messes up the state of the stream if it fails.
+            //We can't just wrap it in a retry attempt.
             try {
                 // if the current position is before but nearby do not open a new connection
                 // but skip the bytes until the new position
@@ -121,12 +123,16 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
                     }
                     bytesToSkip -= skipped;
                 }
-                logger.debug("Skipped {} bytes out of {} for setting position to {} (previously on {})",
+                logger.debug("Skipped {} bytes out of {} when setting position to {} (previously on {})",
                         bytesToSkip, bytesToSkip, newPosition, position);
             } catch (IOException ex){
-                //If we encounter a problem just reopen and use those retries.
-                closeSilently();
-                instantiateChannel(newPosition);
+                logger.warn("Failure during skipping operation.  Reopening the connection. \nCaused by :{}", ex.getMessage());
+                if(settings.retrySettings().maxRetries() > 0) {
+                    //If we encounter a problem just reopen and use those retries.
+                    //Note that this technically gives us 1 extra immediate retry here but that's probably ok.
+                    closeSilently();
+                    instantiateChannel(newPosition);
+                }
             }
         } else {
             // in this case, we require to re-instantiate the channel
@@ -137,13 +143,12 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
 
         // update to the new position
         this.position = newPosition;
-
         return this;
     }
 
     @Override
     public synchronized long size() throws IOException {
-        runWithRetries( () -> {
+        retryHandler.runWithRetries( () -> {
             if (!isOpen()) {
                 throw new ClosedChannelException();
             }
@@ -224,7 +229,7 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
 
     // open a readable byte channel for the requested position
     private synchronized void instantiateChannel(final long position) throws IOException {
-        runWithRetries(() -> {
+        retryHandler.runWithRetries(() -> {
             final HttpRequest.Builder builder = HttpRequest.newBuilder(uri).GET();
             final boolean isRangeRequest = position != 0;
             if (isRangeRequest) {
@@ -249,17 +254,6 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
         });
     }
 
-    private interface IOSupplier<T> {
-        public T get() throws IOException;
-    }
-
-    private interface IORunnable {
-        public void run() throws IOException;
-    }
-
-    private void runWithRetries(final IORunnable toRun) throws IOException {
-        runWithRetries((IOSupplier<Void>)(() -> {toRun.run(); return null;}));
-    }
 
     public static class UnexpectedHttpResponseException extends IOException {
         private final int responseCode;
@@ -280,30 +274,5 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
         }
     }
 
-    private <T> T runWithRetries(final IOSupplier<T> toRun) throws IOException {
-        final HTTPRetryHandler retryHandler = new HTTPRetryHandler(settings.retrySettings());
 
-        int retries = 0;
-        IOException mostRecentFailureReason = null;
-        while(retries <= retryHandler.getMaxRetries()) {
-            try {
-                return toRun.get();
-            } catch (final IOException ex) {
-                mostRecentFailureReason = ex;
-
-                if (retryHandler.isRetryable(ex)) {
-                    retries++;
-                    //log a warning
-                    logger.warn("Retrying connection to {} at position {} due to error: {}. \nThis will be retry #{}", uri, position, ex.getMessage(), retries);
-                } else {
-                    throw ex;
-                }
-            }
-            retryHandler.sleepBeforeNextAttempt(retries);
-        }
-        throw new IOException(
-                "All %d retries failed. Waited a total of %d ms between attempts."
-                        .formatted(retries, retryHandler.getTotalWaitTime().toMillis()),
-                mostRecentFailureReason);
-    }
 }

@@ -23,8 +23,8 @@ public record HttpFileSystemProviderSettings(Proxy proxy, boolean useCaching,
                                            ) {
 
     public static final RetrySettings DEFAULT_RETRY_SETTINGS = new RetrySettings(3,
-            HTTPRetryHandler.DEFAULT_RETRYABLE_HTTP_CODES,
-            HTTPRetryHandler.DEFAULT_RETRYABLE_EXCEPTIONS,
+            RetryHandler.DEFAULT_RETRYABLE_HTTP_CODES,
+            RetryHandler.DEFAULT_RETRYABLE_EXCEPTIONS,
             e -> false);
 
     /**

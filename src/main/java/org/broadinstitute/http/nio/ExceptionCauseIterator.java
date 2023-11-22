@@ -5,7 +5,7 @@ import java.util.NoSuchElementException;
 
 class ExceptionCauseIterator implements Iterator<Throwable>, Iterable<Throwable> {
     private Throwable next;
-    private static final int MAX_DEPTH = 20;
+    public static final int MAX_DEPTH = 20;
     private int depth = 0;
 
     public ExceptionCauseIterator(Throwable ex) {

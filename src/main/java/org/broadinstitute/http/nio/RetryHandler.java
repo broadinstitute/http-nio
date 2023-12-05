@@ -21,6 +21,8 @@ import java.util.function.Predicate;
  * when all retries/reopens are exhausted.
  */
 public class RetryHandler {
+    public static final Set<String> DEFALT_RETRYABLE_MESSAGES = Set.of("protocol error:");
+    //IOExceptions with the string `protocol error` can happen when there is bad data returned during an http request
     private static final Logger logger = LoggerFactory.getLogger(RetryHandler.class);
     public static final Set<Class<? extends Exception>> DEFAULT_RETRYABLE_EXCEPTIONS = Set.of(
             SSLException.class,
@@ -37,6 +39,7 @@ public class RetryHandler {
 
     private final int maxRetries;
     private final Set<Integer> retryableHttpCodes;
+    private final Set<String> retryableMessages;
     private final Predicate<Throwable> customRetryPredicate;
     private final URI uri;
     private final Set<Class<? extends Exception>> retryableExceptions;
@@ -46,6 +49,7 @@ public class RetryHandler {
         this(settings.maxRetries(),
                 settings.retryableHttpCodes(),
                 settings.retryableExceptions(),
+                settings.retryableMessages(),
                 settings.retryPredicate(),
                 uri);
 
@@ -95,18 +99,21 @@ public class RetryHandler {
      *
      * @param maxRetries         maximum number of retries
      * @param retryableHttpCodes HTTP codes that are retryable
+     * @param strings
      * @param retryPredicate     predicate to determine if an exception is retryable
      */
     public RetryHandler(
             final int maxRetries,
             final Collection<Integer> retryableHttpCodes,
             final Collection<Class<? extends Exception>> retryableExceptions,
+            final Collection<String> retryableMessages,
             final Predicate<Throwable> retryPredicate,
             final URI uri) {
         Utils.validateArg(maxRetries >= 0, "retries must be >= 0, was " + maxRetries);
         this.maxRetries = maxRetries;
         this.retryableHttpCodes = Set.copyOf(Utils.nonNull(retryableHttpCodes, () -> "retryableHttpCodes"));
         this.retryableExceptions = Set.copyOf(Utils.nonNull(retryableExceptions, () -> "retryableExceptions"));
+        this.retryableMessages = Set.copyOf(Utils.nonNull(retryableMessages, () -> "retryableMessages"));
         this.customRetryPredicate = Utils.nonNull(retryPredicate, () -> "retryPredicate");
         this.uri = Utils.nonNull(uri, () -> "uri");
     }
@@ -144,6 +151,13 @@ public class RetryHandler {
 
             for (Class<? extends Exception> retryable : retryableExceptions) {
                 if (retryable.isInstance(cause)) {
+                    return true;
+                }
+            }
+
+            for (String message : retryableMessages) {
+                final String errorMessage = cause.getMessage();
+                if (errorMessage != null && errorMessage.contains(message)){
                     return true;
                 }
             }

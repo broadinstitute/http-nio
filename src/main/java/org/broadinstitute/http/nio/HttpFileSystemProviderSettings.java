@@ -16,15 +16,23 @@ import java.util.function.Predicate;
  * @param timeout    timeout duration
  * @param retrySettings settings to control retry behavior
  */
-public record HttpFileSystemProviderSettings(Proxy proxy, boolean useCaching,
+public record HttpFileSystemProviderSettings(Proxy proxy,
+                                             boolean useCaching,
                                              Duration timeout,
                                              HttpClient.Redirect redirect,
                                              RetrySettings retrySettings
                                            ) {
 
+    public HttpFileSystemProviderSettings {
+        Utils.nonNull(timeout, () -> "timeout");
+        Utils.nonNull(redirect, () -> "redirect");
+        Utils.nonNull(retrySettings, () -> "retrySettings");
+    }
+
     public static final RetrySettings DEFAULT_RETRY_SETTINGS = new RetrySettings(3,
             RetryHandler.DEFAULT_RETRYABLE_HTTP_CODES,
             RetryHandler.DEFAULT_RETRYABLE_EXCEPTIONS,
+            RetryHandler.DEFALT_RETRYABLE_MESSAGES,
             e -> false);
 
     /**
@@ -46,5 +54,15 @@ public record HttpFileSystemProviderSettings(Proxy proxy, boolean useCaching,
     public record RetrySettings(int maxRetries,
                                   Collection<Integer> retryableHttpCodes,
                                   Collection<Class<? extends Exception>> retryableExceptions,
-                                  Predicate<Throwable> retryPredicate){}
+                                  Collection<String> retryableMessages,
+                                  Predicate<Throwable> retryPredicate){
+
+        public RetrySettings {
+            Utils.validateArg( maxRetries >= 0, "maxRetries must be >= 0");
+            Utils.nonNull(retryableHttpCodes, () -> "retryableHttpCodes");
+            Utils.nonNull(retryableExceptions, () -> "retryableExceptions");
+            Utils.nonNull(retryableMessages,() -> "retryableMessages");
+            Utils.nonNull(retryPredicate, () -> "retryPredicate");
+        }
+    }
 }

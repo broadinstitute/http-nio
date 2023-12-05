@@ -2,9 +2,7 @@ package org.broadinstitute.http.nio;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.nio.channels.SeekableByteChannel;
-import java.nio.file.AccessDeniedException;
 import java.nio.file.AccessMode;
 import java.nio.file.CopyOption;
 import java.nio.file.DirectoryStream;
@@ -111,19 +109,13 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
             checkUri(uri);
 
             // return an HttpSeekableByteChannel
-            return new HttpSeekableByteChannel(uri, getClient(settings), settings);
+            return new HttpSeekableByteChannel(uri, settings, 0L);
         }
         throw new UnsupportedOperationException(
                 String.format("Only %s is supported for %s, but %s options(s) are provided",
                         StandardOpenOption.READ, this, options));
     }
 
-    private static HttpClient getClient(final HttpFileSystemProviderSettings settings) {
-        return HttpClient.newBuilder()
-                .followRedirects(settings.redirect())
-                .connectTimeout(settings.timeout())
-                .build();
-    }
 
     @Override
     public final DirectoryStream<Path> newDirectoryStream(final Path dir,
@@ -180,7 +172,7 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
         Utils.nonNull(path, () -> "null path");
         // get the URI (use also for exception messages)
         final URI uri = checkUri(path.toUri());
-        if (!HttpUtils.exists(uri, getClient(settings))) {
+        if (!HttpUtils.exists(uri, settings)){
             throw new NoSuchFileException(uri.toString());
         }
         for (AccessMode access : modes) {

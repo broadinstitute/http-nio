@@ -51,7 +51,7 @@ public class HttpUtilsUnitTest extends BaseTest {
 
     @Test(dataProvider = "getDocsFilesForTesting", dataProviderClass = GitHubResourcesIntegrationTest.class)
     public void testExistingUrls(final String fileName) throws IOException {
-        Assert.assertTrue(HttpUtils.exists(getGithubPagesFileUri(fileName), HttpClient.newHttpClient()));
+        Assert.assertTrue(HttpUtils.exists(getGithubPagesFileUri(fileName), HttpFileSystemProviderSettings.DEFAULT_SETTINGS));
     }
 
     @DataProvider
@@ -69,6 +69,6 @@ public class HttpUtilsUnitTest extends BaseTest {
     @Test(dataProvider = "nonExistantUrlStrings")
     public void testNonExistingUrl(final String urlString) throws IOException {
         final URI nonExistant = URI.create(urlString);
-            Assert.assertFalse(HttpUtils.exists(nonExistant, HttpClient.newHttpClient()));
+            Assert.assertFalse(HttpUtils.exists(nonExistant, HttpFileSystemProviderSettings.DEFAULT_SETTINGS));
     }
 }

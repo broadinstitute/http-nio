@@ -9,6 +9,7 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.stream.StreamSupport;
 
 /**
@@ -345,6 +346,7 @@ public class HttpPathUnitTest extends BaseTest {
                 {"http://example.com/directory/file.gz?query=hello+world"},
                 {"http://example.com/directory/file.pdf#1"},
                 {"http://example.com/file.gz?query=hello+world#2"},
+                {"http://example.com/file.gz?query=hello%20world#2"},
         };
     }
 

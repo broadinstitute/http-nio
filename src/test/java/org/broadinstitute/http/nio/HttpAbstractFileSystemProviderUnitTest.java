@@ -81,7 +81,9 @@ public class HttpAbstractFileSystemProviderUnitTest extends BaseTest {
                 {"/file.txt"},
                 {"/dir/file.txt"},
                 {"/file.txt?query=1+1"},
-                {"/file.txt#3"}
+                {"/file.txt?query=1&query2=2"},
+                {"/file.txt#3"},
+                {"/file.text?query=hello%20world#2"},
         };
     }
 

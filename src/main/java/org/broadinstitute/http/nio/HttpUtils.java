@@ -79,35 +79,39 @@ public final class HttpUtils {
      *
      * @throws IOException if an I/O error occurs.
      */
-    public static boolean exists(final URI uri, HttpClient client) throws IOException {
+    public static boolean exists(final URI uri, HttpFileSystemProviderSettings settings) throws IOException {
         Utils.nonNull(uri, () -> "null uri");
+        final HttpClient client = getClient(settings);
         final HttpRequest request = HttpRequest.newBuilder(uri)
                 .method("HEAD", HttpRequest.BodyPublishers.noBody())
                 .build();
-        try {
-            final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            return switch (response.statusCode()) {
-                case 200 -> true;
-                case 404 -> false; //doesn't exist
-                case 401 | 403 | 407 -> throw new AccessDeniedException("Access was denied to " + uri
-                        + "\nHttp status: " + response.statusCode()
-                        + "\n" + response.body());
-                default -> throw new IOException("Unexpected response from " + uri
-                        + "\nHttp status: " + response.statusCode()
-                        + "\n" + response.body());
-            };
-        } catch (ConnectException e){
-            Throwable current = e;
-            while(current.getCause()  != null) {
-                current = current.getCause();
-                if( current instanceof UnresolvedAddressException) {
-                    return false;
+
+        final RetryHandler retryHandler = new RetryHandler(settings.retrySettings(), uri);
+        return retryHandler.runWithRetries(() -> {
+            try {
+                final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                return switch (response.statusCode()) {
+                    case 200, 206 -> true;
+                    case 404 -> false; //doesn't exist
+                    case 401 | 403 | 407 -> throw new AccessDeniedException("Access was denied to " + uri
+                            + "\nHttp status: " + response.statusCode()
+                            + "\n" + response.body());
+                    default -> throw new HttpSeekableByteChannel.UnexpectedHttpResponseException(response.statusCode(),
+                            "Unexpected response from " + uri
+                                    + "\nHttp status: " + response.statusCode()
+                                    + "\n" + response.body());
+                };
+            } catch (ConnectException e){
+                for(Throwable cause : new ExceptionCauseIterator(e)){
+                    if(cause instanceof UnresolvedAddressException) {
+                        return false;
+                    }
                 }
+                throw e;
+            } catch (InterruptedException e) {
+                throw new RuntimeException("Connection thread was unexpectedly interrupted while checking existence of "+ uri +".", e);
             }
-            throw e;
-        } catch (InterruptedException e) {
-            throw new RuntimeException("Connection thread was unexpectedly interrupted while checking existence of "+ uri +".", e);
-        }
+        });
     }
     /**
      * Request a range of bytes for a {@link URLConnection}.
@@ -139,5 +143,12 @@ public final class HttpUtils {
         LOGGER.debug("Request '{}' {} for {}", RANGE_REQUEST_PROPERTY_KEY, request, connection);
         // set the range if the position is different from 0
         connection.setRequestProperty(RANGE_REQUEST_PROPERTY_KEY, request);
+    }
+
+    static HttpClient getClient(final HttpFileSystemProviderSettings settings) {
+        return HttpClient.newBuilder()
+                .followRedirects(settings.redirect())
+                .connectTimeout(settings.timeout())
+                .build();
     }
 }

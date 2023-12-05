@@ -8,7 +8,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.http.HttpClient;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.NonWritableChannelException;
@@ -17,9 +16,7 @@ import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Duration;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Stream;
@@ -28,10 +25,8 @@ public class HttpSeekableByteChannelUnitTest extends BaseTest {
     public static final String LARGE_FILE_ON_GOOGLE = "https://storage.googleapis.com/hellbender/test/resources/benchmark/CEUTrio.HiSeq.WEx.b37.NA12892.bam";
     public static final String BIG_TXT_GOOGLE = "https://storage.googleapis.com/hellbender/test/resources/nio/big.txt";
     public static final String BIG_TXT_LOCAL = "testdata/big.txt";
-
-    public static final HttpFileSystemProviderSettings FIVE_RETRIES_EVERY_CASE = new HttpFileSystemProviderSettings(null, false, Duration.ofSeconds(10), HttpClient.Redirect.NORMAL,
-            new HttpFileSystemProviderSettings.RetrySettings(4, Collections.emptyList(), Collections.emptyList(), e -> true));
-
+    public static final String azbUri = "https://lzb25a77f5eadb0fa72a2ae7.blob.core.windows.net/sc-62528cd7-3299-4440-8c17-10f458e589d3/gatk3.7_30_ga4f720357.24_sample.21.expected.vcf?sv=2021-12-02&spr=https&st=2023-12-05T20%3A59%3A17Z&se=2023-12-06T05%3A14%3A17Z&sr=c&sp=racwdlt&sig=zwFlKBL0wl2LhtWZobiLXzeU72HNfkQQk4UJA0K6Hps%3D&rscd=117850515659045301394";
+    public static final String encoded = "https://www.google.com/?wtf=a%20b";
     private SeekableByteChannel getChannel(URI uri) throws IOException {
         return new HttpSeekableByteChannel(uri);
     }
@@ -39,11 +34,6 @@ public class HttpSeekableByteChannelUnitTest extends BaseTest {
     @Test(expectedExceptions = FileNotFoundException.class)
     public void testNonExistentUrl() throws Exception {
         getChannel(getGithubPagesFileUri("not_existent.txt"));
-    }
-
-    @Test
-    public void testNonExistentUrlForcedRetry404() throws Exception {
-
     }
 
     @Test
@@ -295,5 +285,11 @@ public class HttpSeekableByteChannelUnitTest extends BaseTest {
                 System.out.println("End pos: " + remote.position() + " size: " + remote.size());
             }
         }
+    }
+
+    @Test
+    public void testAZB() throws IOException {
+        final URI uri = URI.create(encoded);
+        Assert.assertEquals(Files.readString(Paths.get(uri)),"hello");
     }
 }

@@ -29,7 +29,7 @@ import java.util.Map;
  * method.
  *
  * @author Daniel Gomez-Sanchez (magicDGS)
- * @implNote this seekable byte channel is read-only.
+ * @implNote this seekabe byte channel is read-only.
  */
 public class HttpSeekableByteChannel implements SeekableByteChannel {
 
@@ -38,6 +38,7 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
 
     // url and proxy for the file
     private final URI uri;
+
     private final HttpClient client;
     private ReadableByteChannel channel = null;
     private InputStream backingStream = null;
@@ -52,28 +53,23 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
     private final HttpFileSystemProviderSettings settings;
     private final RetryHandler retryHandler;
 
-
-    private static HttpClient getDefaultClient() {
-        return HttpClient.newBuilder()
-                .followRedirects(HttpClient.Redirect.NORMAL)
-                .build();
-    }
-
     //useful for testing, not generally used
     HttpSeekableByteChannel(URI uri) throws IOException {
-        this(uri, getDefaultClient(), HttpFileSystemProviderSettings.DEFAULT_SETTINGS);
+        this(uri, HttpFileSystemProviderSettings.DEFAULT_SETTINGS, 0L);
     }
 
-    public HttpSeekableByteChannel(final URI uri, final HttpClient client, HttpFileSystemProviderSettings settings) throws IOException {
+    HttpSeekableByteChannel(URI uri, long position) throws IOException {
+        this(uri, HttpFileSystemProviderSettings.DEFAULT_SETTINGS, position);
+    }
+
+    public HttpSeekableByteChannel(final URI uri, HttpFileSystemProviderSettings settings, final long position) throws IOException {
         this.uri = Utils.nonNull(uri, () -> "null URI");
-        this.client = client;
+        this.client = HttpUtils.getClient(Utils.nonNull(settings, () -> "settings"));
         this.settings = settings;
         this.retryHandler = new RetryHandler(settings.retrySettings(), uri);
-        // and instantiate the stream/channel at position 0
-        instantiateChannel(0L);
-
+        // and instantiate the stream/channel
+        instantiateChannel(position);
     }
-
 
     @Override
     public synchronized int read(final ByteBuffer dst) throws IOException {
@@ -243,7 +239,7 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
             } catch (final FileNotFoundException ex) {
                 throw ex;
             } catch (final IOException ex) {
-                throw new IOException("Failed to connect to " + uri + "at positon: " + position, ex);
+                throw new IOException("Failed to connect to " + uri + " at position: " + position, ex);
             } catch (final InterruptedException ex) {
                 throw new IOException("Interrupted while connecting to " + uri + " at position: " + position, ex);
             }

@@ -56,13 +56,14 @@ public class RetryHandlerUnitTest {
                 {new IOException(), false},
                 {new IOException(new IOException("party on")), true},
                 {new SocketException(), true},
-                {new SocketException("party on"), true}
+                {new SocketException("party on"), true},
+                {new IOException(new IOException("hello there")), true},
         };
     }
     @Test(dataProvider = "getForCustomPredicate")
     public void testCustomHandler(IOException ex, boolean retryable) throws URISyntaxException {
         final Predicate<Throwable> customPredicate = e -> e.getMessage() != null && e.getMessage().contains("party on");
-        final HttpFileSystemProviderSettings.RetrySettings settings = new HttpFileSystemProviderSettings.RetrySettings(1, Set.of(666), Set.of(SocketException.class), customPredicate);
+        final HttpFileSystemProviderSettings.RetrySettings settings = new HttpFileSystemProviderSettings.RetrySettings(1, Set.of(666), Set.of(SocketException.class), Set.of("hello"), customPredicate);
         final RetryHandler retryHandler = new RetryHandler( settings, new URI("http://example.com"));
         Assert.assertEquals(retryHandler.isRetryable(ex), retryable);
     }
@@ -96,7 +97,7 @@ public class RetryHandlerUnitTest {
     @Test
     public void test0MaxRetriesRunsOnce() throws IOException {
         final RetryHandler retryHandler = new RetryHandler(0, Collections.emptySet(),
-                Set.of(IOException.class), e -> false, URI.create("http://example.net"));
+                Set.of(IOException.class), Collections.emptySet(), e -> false, URI.create("http://example.net"));
 
         Assert.assertEquals(retryHandler.runWithRetries(() -> 3), 3);
     }
@@ -104,7 +105,7 @@ public class RetryHandlerUnitTest {
     @Test
     public void test0MaxRetriesDoesntRetry() throws IOException {
         final RetryHandler retryHandler = new RetryHandler(0, Collections.emptySet(),
-                Set.of(IOException.class), e -> false, URI.create("http://example.net"));
+                Set.of(IOException.class), Collections.emptySet(), e -> false, URI.create("http://example.net"));
 
         AtomicInteger count = new AtomicInteger(0);
 

@@ -96,7 +96,7 @@ public class HttpAbstractFileSystemProviderUnitTest extends BaseTest {
 
         // expected Path
         final HttpPath expected = new HttpPath(provider.newFileSystem(TEST_BASE_URI, TEST_ENV),
-                uri.getPath(), uri.getQuery(), uri.getFragment());
+                uri.getRawPath(), uri.getRawQuery(), uri.getRawFragment());
         // actual Path
         final HttpPath actual = provider.getPath(uri);
 

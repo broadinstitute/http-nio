@@ -142,7 +142,7 @@ final class HttpFileSystem extends FileSystem {
      * @implNote this method allows to pass the query and fragment to the {@link HttpPath}.
      */
     HttpPath getPath(final URI uri) {
-        return new HttpPath(this, uri.getPath(), uri.getQuery(), uri.getFragment());
+        return new HttpPath(this, uri.getRawPath(), uri.getRawQuery(), uri.getRawFragment());
     }
 
     @Override

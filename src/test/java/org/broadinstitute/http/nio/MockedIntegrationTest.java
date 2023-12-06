@@ -135,10 +135,11 @@ public class MockedIntegrationTest extends BaseTest {
         return new Object[][]{
                 {200, 0, null},
                 {200, 100, HttpSeekableByteChannel.IncompatibleResponseToRangeQueryException.class},
-                {200, 100, HttpSeekableByteChannel.IncompatibleResponseToRangeQueryException.class},
                 {206, 100, null},
+                {206, 0, HttpSeekableByteChannel.IncompatibleResponseToRangeQueryException.class},
                 {404, 0, FileNotFoundException.class},
-                {500, 0, HttpSeekableByteChannel.UnexpectedHttpResponseException.class}
+                {500, 0, OutOfRetriesException.class},
+                {700, 0, HttpSeekableByteChannel.UnexpectedHttpResponseException.class},
         };
     }
 

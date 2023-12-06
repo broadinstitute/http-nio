@@ -83,12 +83,15 @@ public class HttpAbstractFileSystemProviderUnitTest extends BaseTest {
                 {"/file.txt?query=1+1"},
                 {"/file.txt?query=1&query2=2"},
                 {"/file.txt#3"},
+                {"/file.txt#3%204"},
                 {"/file.text?query=hello%20world#2"},
+                {"/file.text?query=hello+world#2%203"},
+                {"/file.text%20file?query=hello+world#2"}
         };
     }
 
     @Test(dataProvider = "pathStrings")
-    public void testGetPath(final String path) throws IOException {
+    public void testGetPath(final String path) {
         final URI uri = URI.create(String.format("%s://%s%s",
                 TEST_BASE_URI.getScheme(), TEST_BASE_URI.getAuthority(), path));
 

@@ -1,5 +1,7 @@
 package org.broadinstitute.http.nio;
 
+import org.broadinstitute.http.nio.utils.ExceptionCauseIterator;
+import org.broadinstitute.http.nio.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,16 +16,26 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 /**
  * Simple counter class to keep track of retry and reopen attempts when StorageExceptions are
  * encountered. Handles sleeping between retry/reopen attempts, as well as throwing an exception
  * when all retries/reopens are exhausted.
+ *
+ * methods may be run and retried by running them through one of the {@link #runWithRetries(IORunnable)} methods
  */
 public class RetryHandler {
+
+    /**
+     * the default set of exception messages which are retried when encountered
+     */
     public static final Set<String> DEFALT_RETRYABLE_MESSAGES = Set.of("protocol error:");
     //IOExceptions with the string `protocol error` can happen when there is bad data returned during an http request
-    private static final Logger logger = LoggerFactory.getLogger(RetryHandler.class);
+
+    /**
+     * default set of exception types which will be retried when encountered
+     */
     public static final Set<Class<? extends Exception>> DEFAULT_RETRYABLE_EXCEPTIONS = Set.of(
             SSLException.class,
             EOFException.class,
@@ -31,8 +43,17 @@ public class RetryHandler {
             SocketTimeoutException.class
     );
 
+    /**
+     * default set of HTTP codes which will be retried
+     */
     public static final Set<Integer> DEFAULT_RETRYABLE_HTTP_CODES = Set.of(500, 502, 503);
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(RetryHandler.class);
+
+
+    /**
+     * @return the maximum number of retries before giving up
+     */
     public int getMaxRetries() {
         return maxRetries;
     }
@@ -40,11 +61,14 @@ public class RetryHandler {
     private final int maxRetries;
     private final Set<Integer> retryableHttpCodes;
     private final Set<String> retryableMessages;
+    private final Set<Class<? extends Exception>> retryableExceptions;
     private final Predicate<Throwable> customRetryPredicate;
     private final URI uri;
-    private final Set<Class<? extends Exception>> retryableExceptions;
 
-
+    /**
+     * @param settings to configure the retry mechanism
+     * @param uri which URI is being queried, used in error messages
+     */
     public RetryHandler(HttpFileSystemProviderSettings.RetrySettings settings, URI uri) {
         this(settings.maxRetries(),
                 settings.retryableHttpCodes(),
@@ -52,55 +76,17 @@ public class RetryHandler {
                 settings.retryableMessages(),
                 settings.retryPredicate(),
                 uri);
-
-    }
-
-    public interface IOSupplier<T> {
-        T get() throws IOException;
-    }
-
-    public interface IORunnable {
-        void run() throws IOException;
-    }
-
-    public void runWithRetries(final IORunnable toRun) throws IOException {
-        runWithRetries((IOSupplier<Void>) (() -> {
-            toRun.run();
-            return null;
-        }));
-    }
-
-    public <T> T runWithRetries(final IOSupplier<T> toRun) throws IOException {
-        Duration totalSleepTime = Duration.ZERO;
-        int tries = 0;
-        IOException mostRecentFailureReason = null;
-        while (tries <= maxRetries) {
-            try {
-                tries++;
-                return toRun.get();
-            } catch (final IOException ex) {
-                mostRecentFailureReason = ex;
-
-                if (isRetryable(ex)) {
-                    //log a warning
-                    logger.warn("Retrying connection to {} due to error: {}. " +
-                            "\nThis will be retry #{}", uri, ex.getMessage(), tries);
-                } else {
-                    throw ex;
-                }
-            }
-            totalSleepTime = totalSleepTime.plus(sleepBeforeNextAttempt(tries));
-        }
-        throw new OutOfRetriesException(tries-1, totalSleepTime, mostRecentFailureReason);
     }
 
     /**
      * Create a CloudStorageRetryHandler with the maximum retries and reopens set to different values.
      *
-     * @param maxRetries         maximum number of retries
-     * @param retryableHttpCodes HTTP codes that are retryable
-     * @param strings
-     * @param retryPredicate     predicate to determine if an exception is retryable
+     * @param maxRetries          maximum number of retries, 0 means nothing will be retried
+     * @param retryableHttpCodes  HTTP codes that are retryable
+     * @param retryableExceptions exception classes to retry when encountered
+     * @param retryableMessages   strings which will be matched against the exception messages
+     * @param retryPredicate      predicate to determine if an exception is retryable
+     * @param uri                 URI which is being retried, used in the error messages
      */
     public RetryHandler(
             final int maxRetries,
@@ -118,7 +104,88 @@ public class RetryHandler {
         this.uri = Utils.nonNull(uri, () -> "uri");
     }
 
-    public Duration sleepBeforeNextAttempt(int attempt) {
+    /**
+     * {@linkplain Supplier} equivalent which can throw IOException
+     * @param <T> supplied type
+     */
+    @FunctionalInterface
+    public interface IOSupplier<T> {
+
+        /**
+         * Equivalent to Supplier.get()
+         * @return the value returned
+         * @throws IOException if there is an error during operation
+         */
+        T get() throws IOException;
+    }
+
+    /**
+     * {@linkplain } equivalent which can throw IOException
+     */
+    @FunctionalInterface
+    public interface IORunnable {
+
+        /**
+         * equivalent to Runnable.run()
+         * @throws IOException if there is an error during operation
+         */
+        void run() throws IOException;
+    }
+
+    /**
+     * A function to run and potentially retry if an error occurs and meets the retry criteria
+     * Note that functions may be run repeatedly so any state which is changed during an unsuccessful attempt must
+     * not poison the class.  Functions must either clean up in a finally block or reset state entirely each time.
+     * @param toRun the function to run
+     * @throws IOException when the function throws an IOException and either it is unretryable or retries are exhausted
+     *         in the case of a retryable error which is not retried this will be an {@link OutOfRetriesException}
+     */
+    public void runWithRetries(final IORunnable toRun) throws IOException {
+        runWithRetries((IOSupplier<Void>) (() -> {
+            toRun.run();
+            return null;
+        }));
+    }
+
+    /**
+     * A function to run and potentially retry if an error occurs and meets the retry criteria
+     * Note that functions may be run repeatedly so any state which is changed during an unsuccessful attempt must
+     * not poison the class.  Functions must either clean up in a finally block or reset state entirely each time.
+     * @param  toRun the function to run
+     * @param  <T> the type of the value returned by toRun
+     * @throws IOException when the function throws an IOException and either it is unretryable or retries are exhausted
+     *         in the case of a retryable error which is not retried this will be an {@link OutOfRetriesException}
+     * @return the value supplied by succesful completion of toRun
+     */
+    public <T> T runWithRetries(final IOSupplier<T> toRun) throws IOException {
+        Duration totalSleepTime = Duration.ZERO;
+        int tries = 0;
+        IOException mostRecentFailureReason = null;
+        while (tries <= maxRetries) {
+            try {
+                tries++;
+                return toRun.get();
+            } catch (final IOException ex) {
+                mostRecentFailureReason = ex;
+
+                if (isRetryable(ex)) {
+                    //log a warning
+                    LOGGER.warn("Retrying connection to {} due to error: {}. " +
+                            "\nThis will be retry #{}", uri, ex.getMessage(), tries);
+                } else {
+                    throw ex;
+                }
+            }
+            totalSleepTime = totalSleepTime.plus(sleepBeforeNextAttempt(tries));
+        }
+        throw new OutOfRetriesException(tries - 1, totalSleepTime, mostRecentFailureReason);
+    }
+
+    /**
+     * @param attempt attempt number, used to determine the wait time
+     * @return the actual amount of time this slept for
+     */
+    private static Duration sleepBeforeNextAttempt(int attempt) {
         // exponential backoff, but let's bound it around 2min.
         // aggressive backoff because we're dealing with unusual cases.
         Duration delay = Duration.ofMillis((1L << Math.min(attempt, 7)));
@@ -142,7 +209,7 @@ public class RetryHandler {
     public boolean isRetryable(final Exception exs) {
         // loop through all the causes in the exception chain in case it's buried
         for (Throwable cause : new ExceptionCauseIterator(exs)) {
-            if (cause instanceof HttpSeekableByteChannel.UnexpectedHttpResponseException responseException) {
+            if (cause instanceof UnexpectedHttpResponseException responseException) {
                 if( retryableHttpCodes.contains(responseException.getResponseCode())){
                     //give the custom predicate a chance to handle unknown response codes by only returning when true
                     return true;
@@ -168,6 +235,4 @@ public class RetryHandler {
         }
         return false;
     }
-
-
 }

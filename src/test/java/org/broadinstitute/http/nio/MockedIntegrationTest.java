@@ -110,7 +110,7 @@ public class MockedIntegrationTest extends BaseTest {
 
 
         final URI uri = getUri("/file.txt");
-        final HttpFileSystemProviderSettings settings = new HttpFileSystemProviderSettings(null, true, Duration.ofSeconds(2),
+        final HttpFileSystemProviderSettings settings = new HttpFileSystemProviderSettings(Duration.ofSeconds(2),
                 HttpClient.Redirect.NORMAL,
                 new HttpFileSystemProviderSettings.RetrySettings(1, RetryHandler.DEFAULT_RETRYABLE_HTTP_CODES,
                         RetryHandler.DEFAULT_RETRYABLE_EXCEPTIONS,
@@ -134,12 +134,12 @@ public class MockedIntegrationTest extends BaseTest {
     public static Object[][] getReturnCodes() {
         return new Object[][]{
                 {200, 0, null},
-                {200, 100, HttpSeekableByteChannel.IncompatibleResponseToRangeQueryException.class},
+                {200, 100, IncompatibleResponseToRangeQueryException.class},
                 {206, 100, null},
-                {206, 0, HttpSeekableByteChannel.IncompatibleResponseToRangeQueryException.class},
+                {206, 0, IncompatibleResponseToRangeQueryException.class},
                 {404, 0, FileNotFoundException.class},
                 {500, 0, OutOfRetriesException.class},
-                {700, 0, HttpSeekableByteChannel.UnexpectedHttpResponseException.class},
+                {700, 0, UnexpectedHttpResponseException.class},
         };
     }
 

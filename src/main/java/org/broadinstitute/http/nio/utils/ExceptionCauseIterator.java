@@ -1,13 +1,25 @@
-package org.broadinstitute.http.nio;
+package org.broadinstitute.http.nio.utils;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
-class ExceptionCauseIterator implements Iterator<Throwable>, Iterable<Throwable> {
-    private Throwable next;
+/**
+ * Iterate through the cause chain of a Throwable to examine all the causes in turn
+ * Bounded by {@linkplain #MAX_DEPTH} in order to prevent infinite loops.
+ */
+public class ExceptionCauseIterator implements Iterator<Throwable>, Iterable<Throwable> {
+
+    /**
+     * The maximum depth of causes to explore before stopping
+     */
     public static final int MAX_DEPTH = 20;
+
+    private Throwable next;
     private int depth = 0;
 
+    /**
+     * @param ex the exception which will be iterated through
+     */
     public ExceptionCauseIterator(Throwable ex) {
         next = ex;
     }

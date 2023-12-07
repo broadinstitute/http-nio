@@ -1,5 +1,7 @@
 package org.broadinstitute.http.nio;
 
+import org.broadinstitute.http.nio.utils.ExceptionCauseIterator;
+import org.broadinstitute.http.nio.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -73,7 +75,8 @@ public final class HttpUtils {
      * <li>The host is known (connection does not throw {@link UnknownHostException}.</li>
      * </ul>
      *
-     * @param url URL to test for existance.
+     * @param uri URI to test for existance.
+     * @param settings the settings to use to build the http connections
      *
      * @return {@code true} if the URL exists; {@code false} otherwise.
      *
@@ -96,7 +99,7 @@ public final class HttpUtils {
                     case 401 | 403 | 407 -> throw new AccessDeniedException("Access was denied to " + uri
                             + "\nHttp status: " + response.statusCode()
                             + "\n" + response.body());
-                    default -> throw new HttpSeekableByteChannel.UnexpectedHttpResponseException(response.statusCode(),
+                    default -> throw new UnexpectedHttpResponseException(response.statusCode(),
                             "Unexpected response from " + uri
                                     + "\nHttp status: " + response.statusCode()
                                     + "\n" + response.body());

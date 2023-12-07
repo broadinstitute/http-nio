@@ -1,5 +1,7 @@
 package org.broadinstitute.http.nio;
 
+import org.broadinstitute.http.nio.utils.Utils;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOError;

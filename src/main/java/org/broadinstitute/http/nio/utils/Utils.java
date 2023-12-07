@@ -1,4 +1,4 @@
-package org.broadinstitute.http.nio;
+package org.broadinstitute.http.nio.utils;
 
 import java.util.function.Supplier;
 
@@ -29,6 +29,10 @@ public class Utils {
         return o;
     }
 
+    /**
+     * @param condition throw an Illegal argument exception if !condition
+     * @param msg the error message when the condition is not met
+     */
     public static void validateArg(final boolean condition, final String msg){
         if (!condition){
             throw new IllegalArgumentException(msg);

@@ -1,5 +1,7 @@
 package org.broadinstitute.http.nio;
 
+import org.broadinstitute.http.nio.utils.Utils;
+
 import java.io.IOException;
 import java.net.URI;
 import java.nio.channels.SeekableByteChannel;

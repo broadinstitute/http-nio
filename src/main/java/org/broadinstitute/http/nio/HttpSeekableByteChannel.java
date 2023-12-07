@@ -1,5 +1,6 @@
 package org.broadinstitute.http.nio;
 
+import org.broadinstitute.http.nio.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,10 +35,12 @@ import java.util.Map;
 public class HttpSeekableByteChannel implements SeekableByteChannel {
 
     private static final long SKIP_DISTANCE = 8 * 1024;
-    private static final Logger logger = LoggerFactory.getLogger(HttpSeekableByteChannel.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(HttpSeekableByteChannel.class);
 
     // url and proxy for the file
     private final URI uri;
+    private final HttpFileSystemProviderSettings settings;
+    private final RetryHandler retryHandler;
 
     private final HttpClient client;
     private ReadableByteChannel channel = null;
@@ -50,18 +53,32 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
     private long size = -1;
 
 
-    private final HttpFileSystemProviderSettings settings;
-    private final RetryHandler retryHandler;
-
-    //useful for testing, not generally used
-    HttpSeekableByteChannel(URI uri) throws IOException {
+    /**
+     * create a new seekable channel with default setttings at beggining of the file
+     * @param uri the URI to connect to, this should not include range parameters already
+     * @throws IOException if no connection can be established
+     */
+    public HttpSeekableByteChannel(URI uri) throws IOException {
         this(uri, HttpFileSystemProviderSettings.DEFAULT_SETTINGS, 0L);
     }
 
-    HttpSeekableByteChannel(URI uri, long position) throws IOException {
+    /**
+     * Create a new seekable channel with default setttins and seek to the given position
+     * @param uri the URI to connect to, this should not include range parameters already
+     * @param position an initial byte offset to open the file at
+     * @throws IOException if no connection can be established
+     */
+    public HttpSeekableByteChannel(URI uri, long position) throws IOException {
         this(uri, HttpFileSystemProviderSettings.DEFAULT_SETTINGS, position);
     }
 
+    /**
+     * Create a new seekable channel which reads from the requested URI
+     * @param uri the URI to connect to, this should not include range parameters already
+     * @param settings settings to configure the connecton and retry handling
+     * @param position an initial byte offset to open the file at
+     * @throws IOException if no connection can be established
+     */
     public HttpSeekableByteChannel(final URI uri, HttpFileSystemProviderSettings settings, final long position) throws IOException {
         this.uri = Utils.nonNull(uri, () -> "null URI");
         this.client = HttpUtils.getClient(Utils.nonNull(settings, () -> "settings"));
@@ -119,10 +136,10 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
                     }
                     bytesToSkip -= skipped;
                 }
-                logger.debug("Skipped {} bytes out of {} when setting position to {} (previously on {})",
+                LOGGER.debug("Skipped {} bytes out of {} when setting position to {} (previously on {})",
                         bytesToSkip, bytesToSkip, newPosition, position);
             } catch (IOException ex){
-                logger.warn("Failure during skipping operation.  Reopening the connection. \nCaused by :{}", ex.getMessage());
+                LOGGER.warn("Failure during skipping operation.  Reopening the connection. \nCaused by :{}", ex.getMessage());
                 if(settings.retrySettings().maxRetries() > 0) {
                     //If we encounter a problem just reopen and use those retries.
                     //Note that this technically gives us 1 extra immediate retry here but that's probably ok.
@@ -249,26 +266,4 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
             this.position = position;
         });
     }
-
-
-    public static class UnexpectedHttpResponseException extends IOException {
-        private final int responseCode;
-
-        public UnexpectedHttpResponseException(int responseCode, String msg){
-            super(msg);
-            this.responseCode = responseCode;
-        }
-
-        public int getResponseCode() {
-            return responseCode;
-        }
-    }
-
-    public static class IncompatibleResponseToRangeQueryException extends UnexpectedHttpResponseException {
-        public IncompatibleResponseToRangeQueryException(int code, String msg){
-            super(code, msg);
-        }
-    }
-
-
 }

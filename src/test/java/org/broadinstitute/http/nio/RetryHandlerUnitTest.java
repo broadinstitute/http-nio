@@ -21,8 +21,8 @@ public class RetryHandlerUnitTest {
     final RetryHandler defaultRetryHandler = new RetryHandler(HttpFileSystemProviderSettings.DEFAULT_RETRY_SETTINGS, URI.create("http://example.com"));
     @DataProvider
     public static Object[][] getExceptionalConditions() {
-        final HttpSeekableByteChannel.UnexpectedHttpResponseException retriableUnexpectedResponse = new HttpSeekableByteChannel.UnexpectedHttpResponseException(500, "retry");
-        final HttpSeekableByteChannel.UnexpectedHttpResponseException fatalUnexpectedResponse = new HttpSeekableByteChannel.UnexpectedHttpResponseException(100, "fatal");
+        final UnexpectedHttpResponseException retriableUnexpectedResponse = new UnexpectedHttpResponseException(500, "retry");
+        final UnexpectedHttpResponseException fatalUnexpectedResponse = new UnexpectedHttpResponseException(100, "fatal");
 
         return new Object[][]{
                 {fatalUnexpectedResponse, false},
@@ -49,10 +49,10 @@ public class RetryHandlerUnitTest {
     @DataProvider
     public Object[][] getForCustomPredicate(){
         return new Object[][] {
-                {new HttpSeekableByteChannel.UnexpectedHttpResponseException(666,"the beast"), true},
-                {new HttpSeekableByteChannel.UnexpectedHttpResponseException(666,"party on"), true},
-                {new HttpSeekableByteChannel.UnexpectedHttpResponseException(668,"the neighbor of the beast"), false},
-                {new HttpSeekableByteChannel.UnexpectedHttpResponseException(668,"party on"), true},
+                {new UnexpectedHttpResponseException(666,"the beast"), true},
+                {new UnexpectedHttpResponseException(666,"party on"), true},
+                {new UnexpectedHttpResponseException(668,"the neighbor of the beast"), false},
+                {new UnexpectedHttpResponseException(668,"party on"), true},
                 {new IOException(), false},
                 {new IOException(new IOException("party on")), true},
                 {new SocketException(), true},

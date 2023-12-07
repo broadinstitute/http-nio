@@ -1,5 +1,6 @@
 package org.broadinstitute.http.nio;
 
+import org.broadinstitute.http.nio.utils.ExceptionCauseIterator;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 

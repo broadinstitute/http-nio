@@ -1,10 +1,11 @@
 package org.broadinstitute.http.nio;
 
+import org.broadinstitute.http.nio.utils.HttpUtils;
+import org.broadinstitute.http.nio.utils.Utils;
+
 import java.io.IOException;
 import java.net.URI;
-import java.net.URL;
 import java.nio.channels.SeekableByteChannel;
-import java.nio.file.AccessDeniedException;
 import java.nio.file.AccessMode;
 import java.nio.file.CopyOption;
 import java.nio.file.DirectoryStream;
@@ -23,6 +24,7 @@ import java.nio.file.attribute.FileAttributeView;
 import java.nio.file.attribute.FileTime;
 import java.nio.file.spi.FileSystemProvider;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -53,7 +55,7 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
         // non-null URI
         Utils.nonNull(uri, () -> "null URI");
         // non-null authority
-        Utils.nonNull(uri.getRawAuthority(),
+        Utils.nonNull(uri.getAuthority(),
                 () -> String.format("%s requires URI with authority: invalid %s", this, uri));
         // check the scheme (sanity check)
         if (!getScheme().equalsIgnoreCase(uri.getScheme())) {
@@ -67,17 +69,17 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
     public final HttpFileSystem newFileSystem(final URI uri, final Map<String, ?> env) {
         checkUri(uri);
 
-        if (fileSystems.containsKey(uri.getRawAuthority())) {
+        if (fileSystems.containsKey(uri.getAuthority())) {
             throw new FileSystemAlreadyExistsException("URI: " + uri);
         }
 
-        return fileSystems.computeIfAbsent(uri.getRawAuthority(),
+        return fileSystems.computeIfAbsent(uri.getAuthority(),
                 (auth) -> new HttpFileSystem(this, auth));
     }
 
     @Override
     public final HttpFileSystem getFileSystem(final URI uri) {
-        final HttpFileSystem fs = fileSystems.get(checkUri(uri).getRawAuthority());
+        final HttpFileSystem fs = fileSystems.get(checkUri(uri).getAuthority());
         if (fs == null) {
             throw new FileSystemNotFoundException("URI: " + uri);
         }
@@ -88,7 +90,7 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
     public final HttpPath getPath(final URI uri) {
         checkUri(uri);
         return fileSystems
-                .computeIfAbsent(uri.getRawAuthority(), (auth) -> new HttpFileSystem(this, auth))
+                .computeIfAbsent(uri.getAuthority(), (auth) -> new HttpFileSystem(this, auth))
                 .getPath(uri);
     }
 
@@ -103,19 +105,21 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
         if (options.isEmpty() ||
                 (options.size() == 1 && options.contains(StandardOpenOption.READ))) {
             // convert Path to URI and check it to see if there is a mismatch with the provider
-            // afterwards, convert to an URL
-            final URL url = checkUri(path.toUri()).toURL();
-            // return a URL SeekableByteChannel
-            return new URLSeekableByteChannel(url);
+            final URI uri = path.toUri();
+            checkUri(uri);
+
+            // return an HttpSeekableByteChannel
+            return new HttpSeekableByteChannel(uri, settings, 0L);
         }
         throw new UnsupportedOperationException(
                 String.format("Only %s is supported for %s, but %s options(s) are provided",
                         StandardOpenOption.READ, this, options));
     }
 
+
     @Override
     public final DirectoryStream<Path> newDirectoryStream(final Path dir,
-            final DirectoryStream.Filter<? super Path> filter) throws IOException {
+            final DirectoryStream.Filter<? super Path> filter) {
         throw new UnsupportedOperationException("Not implemented");
     }
 
@@ -168,18 +172,12 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
         Utils.nonNull(path, () -> "null path");
         // get the URI (use also for exception messages)
         final URI uri = checkUri(path.toUri());
-        if (!HttpUtils.exists(uri.toURL())) {
+        if (!HttpUtils.exists(uri, settings)){
             throw new NoSuchFileException(uri.toString());
         }
         for (AccessMode access : modes) {
-            switch (access) {
-                case READ:
-                    break;
-                case WRITE:
-                case EXECUTE:
-                    throw new AccessDeniedException(uri.toString());
-                default:
-                    throw new UnsupportedOperationException("Unsupported access mode: " + access);
+            if (Objects.requireNonNull(access) != AccessMode.READ) {
+                throw new UnsupportedOperationException("Unsupported access mode: " + access);
             }
         }
     }

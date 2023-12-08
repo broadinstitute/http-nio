@@ -49,7 +49,10 @@ public class HttpFileSystemUnitTest extends BaseTest {
         return new Object[][] {
                 {TEST_AUTHORITY},
                 {"example.org"},
-                {"hello.worl.net"}
+                {"hello.world.net"},
+                {"user:password@example.com"},
+                {"example.org:100"},
+                {"user:password@example.org:100"}
         };
     }
 

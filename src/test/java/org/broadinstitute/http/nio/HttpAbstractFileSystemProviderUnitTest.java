@@ -10,7 +10,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
-import java.nio.file.AccessDeniedException;
 import java.nio.file.AccessMode;
 import java.nio.file.FileSystemAlreadyExistsException;
 import java.nio.file.FileSystemNotFoundException;
@@ -82,12 +81,17 @@ public class HttpAbstractFileSystemProviderUnitTest extends BaseTest {
                 {"/file.txt"},
                 {"/dir/file.txt"},
                 {"/file.txt?query=1+1"},
-                {"/file.txt#3"}
+                {"/file.txt?query=1&query2=2"},
+                {"/file.txt#3"},
+                {"/file.txt#3%204"},
+                {"/file.text?query=hello%20world#2"},
+                {"/file.text?query=hello+world#2%203"},
+                {"/file.text%20file?query=hello+world#2"}
         };
     }
 
     @Test(dataProvider = "pathStrings")
-    public void testGetPath(final String path) throws IOException {
+    public void testGetPath(final String path) {
         final URI uri = URI.create(String.format("%s://%s%s",
                 TEST_BASE_URI.getScheme(), TEST_BASE_URI.getAuthority(), path));
 
@@ -95,7 +99,7 @@ public class HttpAbstractFileSystemProviderUnitTest extends BaseTest {
 
         // expected Path
         final HttpPath expected = new HttpPath(provider.newFileSystem(TEST_BASE_URI, TEST_ENV),
-                uri.getPath(), uri.getQuery(), uri.getFragment());
+                uri.getRawPath(), uri.getRawQuery(), uri.getRawFragment());
         // actual Path
         final HttpPath actual = provider.getPath(uri);
 
@@ -159,24 +163,24 @@ public class HttpAbstractFileSystemProviderUnitTest extends BaseTest {
     }
 
     @DataProvider
-    public Object[][] deniedAccess() {
+    public Object[][] readOnly() {
         return new Object[][] {
             {AccessMode.EXECUTE},
             {AccessMode.WRITE}
         };
     }
 
-    @Test(dataProvider= "deniedAccess", expectedExceptions = AccessDeniedException.class)
-    public void testCheckAccessDenied(final AccessMode deniedAcces) throws Exception {
+    @Test(dataProvider= "readOnly", expectedExceptions = UnsupportedOperationException.class)
+    public void testReadOnly(final AccessMode deniedAcces) throws Exception {
         final HttpsFileSystemProvider https = new HttpsFileSystemProvider();
-        final HttpPath path = https.getPath(getGithubPagesFileUrl("file1.txt").toURI());
+        final HttpPath path = https.getPath(getGithubPagesFileUri("file1.txt"));
         https.checkAccess(path, deniedAcces);
     }
 
     @Test
     public void testCheckAccessRead() throws Exception {
         final HttpsFileSystemProvider https = new HttpsFileSystemProvider();
-        final HttpPath path = https.getPath(getGithubPagesFileUrl("file1.txt").toURI());
+        final HttpPath path = https.getPath(getGithubPagesFileUri("file1.txt"));
         // this shouldn't throw
         https.checkAccess(path, AccessMode.READ);
     }
@@ -184,7 +188,7 @@ public class HttpAbstractFileSystemProviderUnitTest extends BaseTest {
     @Test(expectedExceptions = NoSuchFileException.class)
     public void testCheckAccessNoSuchFile() throws Exception {
         final HttpsFileSystemProvider https = new HttpsFileSystemProvider();
-        final HttpPath path = https.getPath(getGithubPagesFileUrl("no_exists.txt").toURI());
+        final HttpPath path = https.getPath(getGithubPagesFileUri("no_exists.txt"));
         https.checkAccess(path, AccessMode.READ);
     }
 

@@ -1,5 +1,6 @@
 package org.broadinstitute.http.nio;
 
+import org.broadinstitute.http.nio.utils.HttpUtils;
 import org.mockito.Mockito;
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;
@@ -7,7 +8,6 @@ import org.testng.annotations.Test;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URL;
 import java.net.URLConnection;
 
 /**
@@ -33,33 +33,18 @@ public class HttpUtilsUnitTest extends BaseTest {
         };
     }
 
-    @Test(dataProvider = "illegalArgumentsForRangeRequest", expectedExceptions = IllegalArgumentException.class)
-    public void testSetRangeRequestIllegalArguments(final URLConnection connection, final int start, final int end) {
-        HttpUtils.setRangeRequest(connection, start, end);
-    }
-
-    @Test(expectedExceptions = IllegalArgumentException.class)
-    public void testDisconnectNull() {
-        HttpUtils.disconnect(null);
-    }
-
-    @Test(expectedExceptions = IllegalArgumentException.class)
-    public void testSetRangeRequestNull() {
-        HttpUtils.setRangeRequest(null, 10, 100);
-    }
-
     @Test(dataProvider = "getDocsFilesForTesting", dataProviderClass = GitHubResourcesIntegrationTest.class)
     public void testExistingUrls(final String fileName) throws IOException {
-        Assert.assertTrue(HttpUtils.exists(getGithubPagesFileUrl(fileName)));
+        Assert.assertTrue(HttpUtils.exists(getGithubPagesFileUri(fileName), HttpFileSystemProviderSettings.DEFAULT_SETTINGS));
     }
 
     @DataProvider
     public Object[][] nonExistantUrlStrings() {
         return new Object[][] {
                 // unknown host
-                {"http://www.unknown_host.com"},
+                {"http://www.doesntexist.invalid"},
                 // non existant resource
-                {"http://www.example.com/non_existant.html"}
+                {"http://www.example.com/nonexistant.html"}
         };
     }
 
@@ -67,7 +52,7 @@ public class HttpUtilsUnitTest extends BaseTest {
     // probably other home internet providers fail too
     @Test(dataProvider = "nonExistantUrlStrings")
     public void testNonExistingUrl(final String urlString) throws IOException {
-        final URL nonExistant = URI.create(urlString).toURL();
-        Assert.assertFalse(HttpUtils.exists(nonExistant));
+        final URI nonExistant = URI.create(urlString);
+            Assert.assertFalse(HttpUtils.exists(nonExistant, HttpFileSystemProviderSettings.DEFAULT_SETTINGS));
     }
 }

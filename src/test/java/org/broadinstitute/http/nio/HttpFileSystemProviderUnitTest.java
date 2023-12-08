@@ -9,7 +9,7 @@ import org.testng.annotations.Test;
 public class HttpFileSystemProviderUnitTest extends BaseTest {
 
     @Test
-    public void testGetScheme() throws Exception {
+    public void testGetScheme() {
         Assert.assertEquals(new HttpFileSystemProvider().getScheme(), "http");
     }
 }

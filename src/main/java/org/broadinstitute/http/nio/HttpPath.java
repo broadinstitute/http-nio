@@ -1,5 +1,8 @@
 package org.broadinstitute.http.nio;
 
+import org.broadinstitute.http.nio.utils.HttpUtils;
+import org.broadinstitute.http.nio.utils.Utils;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOError;
@@ -52,15 +55,18 @@ final class HttpPath implements Path {
     private final HttpFileSystem fs;
 
     // path - similar to other implementation of Path
+    //Stored in encoded form
     private final byte[] normalizedPath;
 
     // offsets for the separator (computed if needed)
     private volatile int[] offsets;
 
     // query for the URL (may be null)
+    //Stored in encoded form
     private final String query;
 
     // reference for the URL (may be null) / fragment for the URI representation
+    //Stored in encoded form
     private final String reference;
 
     // true if the path is absolute; false otherwise
@@ -370,10 +376,7 @@ final class HttpPath implements Path {
     @Override
     public URI toUri() {
         try {
-            return new URI(fs.provider().getScheme(),
-                    fs.getAuthority(),
-                    new String(normalizedPath, HttpUtils.HTTP_PATH_CHARSET),
-                    query, reference);
+            return new URI(toUriString());
         } catch (final URISyntaxException e) {
             throw new IOError(e);
         }
@@ -503,6 +506,10 @@ final class HttpPath implements Path {
 
     @Override
     public String toString() {
+        return toUriString();
+    }
+
+    private String toUriString() {
         // TODO - maybe we should cache (https://github.com/magicDGS/jsr203-http/issues/18)
         // adding scheme, authority and normalized path
         final StringBuilder sb = new StringBuilder(fs.provider().getScheme()) // scheme

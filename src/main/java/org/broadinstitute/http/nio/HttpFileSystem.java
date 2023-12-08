@@ -1,5 +1,7 @@
 package org.broadinstitute.http.nio;
 
+import org.broadinstitute.http.nio.utils.HttpUtils;
+import org.broadinstitute.http.nio.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

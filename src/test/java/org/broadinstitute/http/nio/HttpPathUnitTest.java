@@ -9,6 +9,7 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.stream.StreamSupport;
 
 /**
@@ -22,8 +23,8 @@ public class HttpPathUnitTest extends BaseTest {
 
     private static final HttpPath createPathFromUriOnTestProvider(final URI uri) {
         return new HttpPath(
-                new HttpFileSystem(TEST_FS_PROVIDER, uri.getAuthority()),
-                uri.getPath(), uri.getQuery(), uri.getFragment());
+                new HttpFileSystem(TEST_FS_PROVIDER, uri.getRawAuthority()),
+                uri.getRawPath(), uri.getRawQuery(), uri.getRawFragment());
     }
 
     private static final HttpPath createPathFromUriStringOnTestProvider(final String uriString) {
@@ -48,7 +49,10 @@ public class HttpPathUnitTest extends BaseTest {
         return new Object[][] {
                 {TEST_AUTHORITY},
                 {"example.org"},
-                {"hello.worl.net"}
+                {"hello.world.net"},
+                {"user:password@example.com"},
+                {"example.org:100"},
+                {"user:password@example.org:100"}
         };
     }
 
@@ -210,7 +214,13 @@ public class HttpPathUnitTest extends BaseTest {
                 {"/dir1/dir2/index.html", "/index.html"},
                 // should also work with redundant paths (as we are already normalizing)
                 {"/dir//index.html", "/index.html"},
-                {"/dir1//dir2//index.txt", "/index.txt"}
+                {"/dir1//dir2//index.txt", "/index.txt"},
+                //Check we ignore queries and fragments
+                {"/dir1//dir2//index.txt?query=hello#2", "/index.txt"},
+                //check encoding
+                {"/dir1//dir%202//index.txt", "/index.txt"},
+                {"/dir1//dir2//index%20file.txt", "/index%20file.txt"}
+
         };
     }
 
@@ -237,7 +247,12 @@ public class HttpPathUnitTest extends BaseTest {
                 {"/dir1/dir2/index.html", "/dir1/dir2"},
                 // should also work with redundant paths (as we are already normalizing)
                 {"/dir//index.html", "/dir"},
-                {"/dir1//dir2//index.txt", "/dir1/dir2"}
+                {"/dir1//dir2//index.txt", "/dir1/dir2"},
+                //Check we ignore queries and fragments
+                {"/dir1//dir2//index.txt?query=hello#2", "/dir1/dir2"},
+                //check encoding
+                {"/dir1//dir%202//index.txt", "/dir1/dir%202"},
+                {"/dir1//dir2//index%20file.txt", "/dir1/dir2"}
         };
     }
 
@@ -295,6 +310,7 @@ public class HttpPathUnitTest extends BaseTest {
                 {"https://" + TEST_AUTHORITY + "/dir/", 1},
                 {"https://" + TEST_AUTHORITY + "/dir1/dir2", 2},
                 {"https://" + TEST_AUTHORITY + "/dir1/dir2/", 2},
+
         };
     }
 
@@ -345,6 +361,9 @@ public class HttpPathUnitTest extends BaseTest {
                 {"http://example.com/directory/file.gz?query=hello+world"},
                 {"http://example.com/directory/file.pdf#1"},
                 {"http://example.com/file.gz?query=hello+world#2"},
+                {"http://example.com/file.gz?query=hello%20world#2"},
+                {"http://example.com/file%201.gz"},
+                {"http://example.com/file%201.gz?query=hello%20world#2%203"},
         };
     }
 

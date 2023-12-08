@@ -135,7 +135,7 @@ publishing {
                 name = 'http-nio'
                 packaging = 'jar'
                 description = project.description
-                url = 'https://github.com/lbergelson/http-nio'
+                url = 'https://github.com/broadinstitute/http-nio'
 
                 developers {
                     developer {
@@ -151,14 +151,14 @@ publishing {
                 }
 
                 scm {
-                    url = 'git@github.com:lbergelson/http-nio.git'
-                    connection = 'scm:git:git@github.com:lbergelson/htt-nio.git'
+                    url = 'git@github.com:broadinstitute/http-nio.git'
+                    connection = 'scm:git:git@github.com:broadinstitute/htt-nio.git'
                 }
 
                 licenses {
                     license {
                         name = 'BSD 3-Clause'
-                        url = 'https://github.com/lbergelson/http-nio/blob/master/LICENSE.txt'
+                        url = 'https://github.com/broadinstitute/http-nio/blob/master/LICENSE.txt'
                         distribution = 'repo'
                     }
                 }

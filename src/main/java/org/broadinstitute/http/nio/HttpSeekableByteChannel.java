@@ -90,21 +90,30 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
     public synchronized int read(final ByteBuffer dst) throws IOException {
         assertChannelIsOpen();
         final int read = retryHandler.tryOnceThenWithRetries(
-                () -> bufferSafeRead(dst, channel),
+                () -> readWithoutPerturbingTheBufferIfAnErrorOccurs(dst, channel),
                 () -> {
+                    // a failed read will leave the underlying channel in an indeterminate state so we have to reopen it
                     closeSilently();
                     openChannel(position);
-                    return bufferSafeRead(dst, channel);
+                    return readWithoutPerturbingTheBufferIfAnErrorOccurs(dst, channel);
                 });
+
         if (read != -1) {
             this.position += read;
         }
         return read;
     }
-    
-    //Read into a duplicate view of the buffer so the intial buffer is left in a good state if the read is 
-    //paritally completed
-    static int bufferSafeRead(final ByteBuffer dst, final ReadableByteChannel channel) throws IOException {
+
+    /**
+     * Performs the equivalent of a channel.read(buf) operation but in the case of an exception the state of the input
+     * buffer is not adversely impacted.
+     *
+     * @param dst a ByteBuffer to read into
+     * @param channel the channel to reaad from
+     * @return the number of bytes read from the channel
+     * @throws IOException if the read operation throws
+     */
+    public static int readWithoutPerturbingTheBufferIfAnErrorOccurs(final ByteBuffer dst, final ReadableByteChannel channel) throws IOException {
         //create a view of the buffer
         final ByteBuffer copy = dst.duplicate();
         copy.order(dst.order());

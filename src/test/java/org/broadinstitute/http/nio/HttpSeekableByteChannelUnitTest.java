@@ -4,11 +4,13 @@ import org.testng.Assert;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
+import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.NonWritableChannelException;
 import java.nio.channels.ReadableByteChannel;
@@ -283,5 +285,64 @@ public class HttpSeekableByteChannelUnitTest extends BaseTest {
                 System.out.println("End pos: " + remote.position() + " size: " + remote.size());
             }
         }
+    }
+
+
+    private static class FailsAfterNBytesChannel implements ReadableByteChannel{
+        boolean isOpen = true;
+        private final int bytesToWriteBeforeFailing;
+        private int bytesWritten = 0;
+
+        private FailsAfterNBytesChannel(final int bytesToWriteBeforeFailing) {
+            this.bytesToWriteBeforeFailing = bytesToWriteBeforeFailing;
+        }
+
+        @Override
+        public int read(final ByteBuffer dst) throws IOException {
+            while(bytesWritten < bytesToWriteBeforeFailing && bytesWritten < dst.capacity()) {
+                dst.put((byte) ++bytesWritten);
+                dst.mark(); // mess with the buffer
+            }
+
+            if (bytesWritten == dst.capacity()){
+                    return bytesWritten;
+            }  else {
+                dst.reset();  // mess with the buffer
+                throw new IOException("Failed after " +bytesWritten + " bytes");
+            }
+        }
+
+        @Override
+        public boolean isOpen() {
+            return isOpen;
+        }
+
+        @Override
+        public void close() throws IOException {
+            isOpen = false;
+        }
+    }
+    @Test
+    public void testFailedReadDoesntPerturbBuffer() throws IOException {
+        final ByteBuffer buf = ByteBuffer.allocate(100);
+        buf.put((byte)99)
+                .put((byte)98)
+                .put((byte)97);
+
+        Assert.assertEquals(buf.position(), 3);
+        final FailsAfterNBytesChannel channel = new FailsAfterNBytesChannel(20);
+        Assert.assertThrows(IOException.class, () -> HttpSeekableByteChannel.readWithoutPerturbingTheBufferIfAnErrorOccurs(buf, channel));
+        Assert.assertEquals(buf.position(), 3, "position should not have changed");
+
+        final ByteArrayInputStream bais = new ByteArrayInputStream(new byte[]{96, 95});
+        final ReadableByteChannel workingChannel = Channels.newChannel(bais);
+        Assert.assertEquals(HttpSeekableByteChannel.readWithoutPerturbingTheBufferIfAnErrorOccurs(buf,workingChannel), 2);
+
+        buf.flip();
+        Assert.assertEquals(buf.get(), 99);
+        Assert.assertEquals(buf.get(), 98);
+        Assert.assertEquals(buf.get(), 97);
+        Assert.assertEquals(buf.get(), 96);
+        Assert.assertEquals(buf.get(), 95);
     }
 }

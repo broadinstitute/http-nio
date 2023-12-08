@@ -18,7 +18,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 
 public class RetryHandlerUnitTest {
-    final RetryHandler defaultRetryHandler = new RetryHandler(HttpFileSystemProviderSettings.DEFAULT_RETRY_SETTINGS, URI.create("http://example.com"));
+    private static final RetryHandler NO_RETRIES_HANDLER = new RetryHandler(0, Collections.emptySet(),
+            Set.of(IOException.class), Collections.emptySet(), e -> false, URI.create("http://example.net"));
+    private static final RetryHandler DEFAULT_RETRY_HANDLER = new RetryHandler(HttpFileSystemProviderSettings.DEFAULT_RETRY_SETTINGS, URI.create("http://example.com"));
     @DataProvider
     public static Object[][] getExceptionalConditions() {
         final UnexpectedHttpResponseException retriableUnexpectedResponse = new UnexpectedHttpResponseException(500, "retry");
@@ -42,7 +44,7 @@ public class RetryHandlerUnitTest {
 
     @Test(dataProvider = "getExceptionalConditions")
     public void testDefaultIsRetryable(IOException exception, boolean retryable) throws URISyntaxException {
-        Assert.assertEquals(defaultRetryHandler.isRetryable(exception), retryable);
+        Assert.assertEquals(DEFAULT_RETRY_HANDLER.isRetryable(exception), retryable);
     }
 
 
@@ -70,12 +72,12 @@ public class RetryHandlerUnitTest {
 
     @Test
     public void testSucessful() throws IOException {
-        Assert.assertEquals(defaultRetryHandler.runWithRetries(() -> 3), 3);
+        Assert.assertEquals(DEFAULT_RETRY_HANDLER.runWithRetries(() -> 3), 3);
     }
 
     @Test(expectedExceptions = RuntimeException.class)
     public void testUnretryableRuntimeException() throws IOException {
-      defaultRetryHandler.runWithRetries(() -> {
+      DEFAULT_RETRY_HANDLER.runWithRetries(() -> {
             throw new RuntimeException("can't retry this");
       });
     }
@@ -83,11 +85,11 @@ public class RetryHandlerUnitTest {
     @Test(expectedExceptions = OutOfRetriesException.class)
     public void testRetryableButAlwaysFails() throws IOException {
         try{
-            defaultRetryHandler.runWithRetries(() -> {
+            DEFAULT_RETRY_HANDLER.runWithRetries(() -> {
                 throw new SocketException();
             });
         } catch (OutOfRetriesException e){
-            Assert.assertEquals(e.getRetries(), defaultRetryHandler.getMaxRetries());
+            Assert.assertEquals(e.getRetries(), DEFAULT_RETRY_HANDLER.getMaxRetries());
             Assert.assertTrue(e.getTotalWaitTime().toMillis() > 0);
             Assert.assertEquals(e.getCause().getClass(), SocketException.class);
             throw e;
@@ -95,22 +97,91 @@ public class RetryHandlerUnitTest {
     }
 
     @Test
-    public void test0MaxRetriesRunsOnce() throws IOException {
-        final RetryHandler retryHandler = new RetryHandler(0, Collections.emptySet(),
-                Set.of(IOException.class), Collections.emptySet(), e -> false, URI.create("http://example.net"));
+    public void testTryOnceAndThenInitialSuccess() throws IOException {
+        AtomicInteger a = new AtomicInteger(0);
+        AtomicInteger b = new AtomicInteger(10);
+        Assert.assertEquals(DEFAULT_RETRY_HANDLER.tryOnceThenWithRetries(
+                a::incrementAndGet,
+                b::incrementAndGet
+        ), 1);
+    }
 
-        Assert.assertEquals(retryHandler.runWithRetries(() -> 3), 3);
+    @Test
+    public void testTryOnceAndThenInitialRetryableFailure() throws IOException {
+        AtomicInteger a = new AtomicInteger(0);
+        AtomicInteger b = new AtomicInteger(10);
+        Assert.assertEquals(DEFAULT_RETRY_HANDLER.tryOnceThenWithRetries(
+                () -> { a.incrementAndGet(); throw new SocketException("I am retryable");},
+                b::incrementAndGet
+        ), 11);
+        Assert.assertEquals(a.get(), 1);
+    }
+
+    @Test
+    public void testTryOnceAndThenInitialNotRetryable() throws IOException {
+        AtomicInteger a = new AtomicInteger(0);
+        AtomicInteger b = new AtomicInteger(10);
+        Assert.assertThrows(IOException.class, () -> DEFAULT_RETRY_HANDLER.tryOnceThenWithRetries(
+                () -> { a.incrementAndGet(); throw new IOException("boom");},
+                b::incrementAndGet
+        ));
+        Assert.assertEquals(a.get(), 1);
+    }
+
+    @Test
+    public void testTryOnceAndThenNoRetrysAvailable() throws IOException {
+        AtomicInteger a = new AtomicInteger(0);
+        AtomicInteger b = new AtomicInteger(10);
+        Assert.assertThrows(OutOfRetriesException.class, () -> NO_RETRIES_HANDLER.tryOnceThenWithRetries(
+                () -> { a.incrementAndGet(); throw new IOException("I'm retryable by this handler");},
+                b::incrementAndGet
+        ));
+        Assert.assertEquals(a.get(), 1);
+        Assert.assertEquals(b.get(), 10);
+    }
+
+    @Test
+    public void testTryOnceAndThenFailFirstRetry() throws IOException {
+        AtomicInteger a = new AtomicInteger(0);
+        AtomicInteger b = new AtomicInteger(10);
+        Assert.assertEquals(DEFAULT_RETRY_HANDLER.tryOnceThenWithRetries(
+                () -> { a.incrementAndGet(); throw new SocketException("I'm retryable");},
+                () -> {
+                    if(b.incrementAndGet() <= 11){
+                        throw new SocketException("I'm retryable");
+                    }
+                    return b.get();
+                }
+        ), 12);
+        Assert.assertEquals(a.get(), 1);
+        Assert.assertEquals(b.get(), 12);
+    }
+
+    @Test
+    public void testTryOnceAndThenFailEveryRetry() throws IOException {
+        AtomicInteger a = new AtomicInteger(0);
+        AtomicInteger b = new AtomicInteger(10);
+        Assert.assertThrows(OutOfRetriesException.class,
+                () -> DEFAULT_RETRY_HANDLER.tryOnceThenWithRetries(
+                    () -> { a.incrementAndGet(); throw new SocketException("I'm retryable");},
+                    () -> { b.incrementAndGet(); throw new SocketException("I'm retryable");}
+                ));
+        Assert.assertEquals(a.get(), 1);
+        Assert.assertEquals(b.get(), 10+DEFAULT_RETRY_HANDLER.getMaxRetries());
+    }
+
+
+    @Test
+    public void test0MaxRetriesRunsOnce() throws IOException {
+        Assert.assertEquals(NO_RETRIES_HANDLER.runWithRetries(() -> 3), 3);
     }
 
     @Test
     public void test0MaxRetriesDoesntRetry() throws IOException {
-        final RetryHandler retryHandler = new RetryHandler(0, Collections.emptySet(),
-                Set.of(IOException.class), Collections.emptySet(), e -> false, URI.create("http://example.net"));
-
         AtomicInteger count = new AtomicInteger(0);
 
         try {
-            retryHandler.runWithRetries(() -> {
+            NO_RETRIES_HANDLER.runWithRetries(() -> {
                 count.incrementAndGet();
                 throw new IOException();
             });

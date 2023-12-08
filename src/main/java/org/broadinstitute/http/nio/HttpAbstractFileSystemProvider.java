@@ -1,5 +1,6 @@
 package org.broadinstitute.http.nio;
 
+import org.broadinstitute.http.nio.utils.HttpUtils;
 import org.broadinstitute.http.nio.utils.Utils;
 
 import java.io.IOException;

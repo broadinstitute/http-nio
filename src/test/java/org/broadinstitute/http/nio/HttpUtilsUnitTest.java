@@ -1,5 +1,6 @@
 package org.broadinstitute.http.nio;
 
+import org.broadinstitute.http.nio.utils.HttpUtils;
 import org.mockito.Mockito;
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;
@@ -7,9 +8,7 @@ import org.testng.annotations.Test;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URL;
 import java.net.URLConnection;
-import java.net.http.HttpClient;
 
 /**
  * @author Daniel Gomez-Sanchez (magicDGS)

@@ -1,5 +1,8 @@
-package org.broadinstitute.http.nio;
+package org.broadinstitute.http.nio.utils;
 
+import org.broadinstitute.http.nio.HttpFileSystemProviderSettings;
+import org.broadinstitute.http.nio.RetryHandler;
+import org.broadinstitute.http.nio.UnexpectedHttpResponseException;
 import org.broadinstitute.http.nio.utils.ExceptionCauseIterator;
 import org.broadinstitute.http.nio.utils.Utils;
 
@@ -89,7 +92,12 @@ public final class HttpUtils {
         });
     }
 
-    static HttpClient getClient(final HttpFileSystemProviderSettings settings) {
+    /**
+     * Get an HttpClient built wth appropriate settings.
+     * @param settings the settings to use for the client
+     * @return a new HttpClient
+     */
+    public static HttpClient getClient(final HttpFileSystemProviderSettings settings) {
         return HttpClient.newBuilder()
                 .followRedirects(settings.redirect())
                 .connectTimeout(settings.timeout())

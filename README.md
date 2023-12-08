@@ -15,4 +15,4 @@ This fork renames the project to be more easily understandable.  It also changes
 ## License
 
 Code licensed under the BSD License. See the
-[LICENSE.txt](https://github.com/lbergelson/http-nio/blob/master/LICENSE.txt).
+[LICENSE.txt](https://github.com/broadinstitute/http-nio/blob/master/LICENSE.txt).

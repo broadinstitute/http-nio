@@ -41,9 +41,6 @@ abstract class HttpAbstractFileSystemProvider extends FileSystemProvider {
     // map of authorities and FileSystem - using a concurrent implementation for thread-safety
     private final Map<String, HttpFileSystem> fileSystems = new ConcurrentHashMap<>();
 
-//    // used only when we create a new instance of CloudStorageFileSystemProvider.
-//    private static StorageOptions futureStorageOptions = StorageOptionsUtil.getDefaultInstance();
-
     /**
      * {@inheritDoc}
      *

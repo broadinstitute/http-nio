@@ -39,7 +39,6 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
 
     // url and proxy for the file
     private final URI uri;
-    private final HttpFileSystemProviderSettings settings;
     private final RetryHandler retryHandler;
 
     private final HttpClient client;
@@ -75,28 +74,53 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
     /**
      * Create a new seekable channel which reads from the requested URI
      * @param uri the URI to connect to, this should not include range parameters already
-     * @param settings settings to configure the connecton and retry handling
+     * @param settings settings to configure the connection and retry handling
      * @param position an initial byte offset to open the file at
      * @throws IOException if no connection can be established
      */
     public HttpSeekableByteChannel(final URI uri, HttpFileSystemProviderSettings settings, final long position) throws IOException {
         this.uri = Utils.nonNull(uri, () -> "null URI");
         this.client = HttpUtils.getClient(Utils.nonNull(settings, () -> "settings"));
-        this.settings = settings;
         this.retryHandler = new RetryHandler(settings.retrySettings(), uri);
         // and instantiate the stream/channel
-        instantiateChannel(position);
+        retryHandler.runWithRetries(() -> openChannel(position));
     }
 
     @Override
     public synchronized int read(final ByteBuffer dst) throws IOException {
-        return retryHandler.runWithRetries( () -> {
-                final int read = channel.read(dst);
-                if (read != -1) {
-                    this.position += read;
-                }
-                return read;
-        });
+        assertChannelIsOpen();
+        final int read = retryHandler.tryOnceThenWithRetries(
+                () -> bufferSafeRead(dst, channel),
+                () -> {
+                    closeSilently();
+                    openChannel(position);
+                    return bufferSafeRead(dst, channel);
+                });
+        if (read != -1) {
+            this.position += read;
+        }
+        return read;
+    }
+    
+    //Read into a duplicate view of the buffer so the intial buffer is left in a good state if the read is 
+    //paritally completed
+    static int bufferSafeRead(final ByteBuffer dst, final ReadableByteChannel channel) throws IOException {
+        //create a view of the buffer
+        final ByteBuffer copy = dst.duplicate();
+        copy.order(dst.order());
+        
+        //this could fail
+        final int read = channel.read(copy);
+
+        //on success, we update the original to the new position in the view
+        dst.position(copy.position());
+        return read;
+    }
+
+    private void assertChannelIsOpen() throws ClosedChannelException {
+        if(!isOpen()){
+            throw new ClosedChannelException();
+        }
     }
 
     @Override
@@ -106,54 +130,40 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
 
     @Override
     public synchronized long position() throws IOException {
-        if (!isOpen()) {
-            throw new ClosedChannelException();
-        }
+        assertChannelIsOpen();
         return position;
     }
 
     @Override
     public synchronized HttpSeekableByteChannel position(long newPosition) throws IOException {
-        if (newPosition < 0) {
-            throw new IllegalArgumentException("Cannot seek to a negative position (from " + position + " to " + newPosition + " ).");
-        }
-        if (!isOpen()) {
-            throw new ClosedChannelException();
-        }
+        assertChannelIsOpen();
+        Utils.validateArg(newPosition >= 0, "Cannot seek to a negative position (from " + position + " to " + newPosition + " ).");
+        
         if (this.position == newPosition) {
-            //nothing to do here
-        } else if (this.position < newPosition && newPosition - this.position < SKIP_DISTANCE) {
-            //This case is special since it messes up the state of the stream if it fails.
-            //We can't just wrap it in a retry attempt.
-            try {
-                // if the current position is before but nearby do not open a new connection
-                // but skip the bytes until the new position
-                long bytesToSkip = newPosition - this.position;
-                while (bytesToSkip > 0) {
-                    final long skipped = backingStream.skip(bytesToSkip);
-                    if (skipped <= 0) {
-                        throw new IOException("Failed to skip any bytes while moving from " + this.position + " to " + newPosition);
-                    }
-                    bytesToSkip -= skipped;
-                }
-                LOGGER.debug("Skipped {} bytes out of {} when setting position to {} (previously on {})",
-                        bytesToSkip, bytesToSkip, newPosition, position);
-            } catch (IOException ex){
-                LOGGER.warn("Failure during skipping operation.  Reopening the connection. \nCaused by :{}", ex.getMessage());
-                if(settings.retrySettings().maxRetries() > 0) {
-                    //If we encounter a problem just reopen and use those retries.
-                    //Note that this technically gives us 1 extra immediate retry here but that's probably ok.
-                    closeSilently();
-                    instantiateChannel(newPosition);
-                }
-            }
+            //nothing to do
+            return this;
+        }
+        else if (this.position < newPosition && newPosition - this.position < SKIP_DISTANCE) {
+         retryHandler.tryOnceThenWithRetries(() -> {
+                     // if the current position is before new position but nearby do not open a new connection
+                     // but skip the bytes until the new position
+                     long bytesToSkip = newPosition - this.position;
+                     backingStream.skipNBytes(bytesToSkip);
+                     LOGGER.debug("Skipped {} bytes out of {} when setting position to {} (previously on {})",
+                             bytesToSkip, bytesToSkip, newPosition, position);
+                     return null;
+                 },
+                 () -> {
+                     closeSilently();
+                     openChannel(newPosition);
+                     return null;
+                 });
         } else {
             // in this case, we require to re-instantiate the channel
             // opening at the new position - and closing the previous
             closeSilently();
-            instantiateChannel(newPosition);
+            retryHandler.runWithRetries(() -> openChannel(newPosition));
         }
-
         // update to the new position
         this.position = newPosition;
         return this;
@@ -161,10 +171,8 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
 
     @Override
     public synchronized long size() throws IOException {
+        assertChannelIsOpen();
         retryHandler.runWithRetries( () -> {
-            if (!isOpen()) {
-                throw new ClosedChannelException();
-            }
             if (size == -1) {
                 HttpRequest headRequest = HttpRequest.newBuilder()
                         .uri(uri)
@@ -241,29 +249,27 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
     }
 
     // open a readable byte channel for the requested position
-    private synchronized void instantiateChannel(final long position) throws IOException {
-        retryHandler.runWithRetries(() -> {
-            final HttpRequest.Builder builder = HttpRequest.newBuilder(uri).GET();
-            final boolean isRangeRequest = position != 0;
-            if (isRangeRequest) {
-                builder.setHeader("Range", "bytes=" + position + "-");
-            }
-            HttpRequest request = builder.build();
+    private synchronized void openChannel(final long position) throws IOException {
+        final HttpRequest.Builder builder = HttpRequest.newBuilder(uri).GET();
+        final boolean isRangeRequest = position != 0;
+        if (isRangeRequest) {
+            builder.setHeader("Range", "bytes=" + position + "-");
+        }
+        HttpRequest request = builder.build();
 
-            final HttpResponse<InputStream> response;
-            try {
-                response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
-            } catch (final FileNotFoundException ex) {
-                throw ex;
-            } catch (final IOException ex) {
-                throw new IOException("Failed to connect to " + uri + " at position: " + position, ex);
-            } catch (final InterruptedException ex) {
-                throw new IOException("Interrupted while connecting to " + uri + " at position: " + position, ex);
-            }
-            assertGoodHttpResponse(response, isRangeRequest);
-            backingStream = new BufferedInputStream(response.body());
-            channel = Channels.newChannel(backingStream);
-            this.position = position;
-        });
+        final HttpResponse<InputStream> response;
+        try {
+            response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+        } catch (final FileNotFoundException ex) {
+            throw ex;
+        } catch (final IOException ex) {
+            throw new IOException("Failed to connect to " + uri + " at position: " + position, ex);
+        } catch (final InterruptedException ex) {
+            throw new IOException("Interrupted while connecting to " + uri + " at position: " + position, ex);
+        }
+        assertGoodHttpResponse(response, isRangeRequest);
+        backingStream = new BufferedInputStream(response.body());
+        channel = Channels.newChannel(backingStream);
+        this.position = position;
     }
 }

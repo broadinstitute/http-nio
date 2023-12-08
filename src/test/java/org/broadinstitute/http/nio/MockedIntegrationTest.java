@@ -18,6 +18,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.nio.ByteBuffer;
+import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -44,6 +45,7 @@ public class MockedIntegrationTest extends BaseTest {
         configureFor("localhost", wireMockServer.port());
         wireMock = new WireMock("localhost", wireMockServer.port());
     }
+
     @AfterMethod
     void stop(){
         wireMockServer.stop();
@@ -156,13 +158,12 @@ public class MockedIntegrationTest extends BaseTest {
         }
     }
 
-    URI getUri(String path){
-        try{
+    URI getUri(String path) {
+        try {
             return new URI(wireMockServer.url(path));
         } catch (URISyntaxException e) {
             throw new RuntimeException(e);
         }
     }
-
 }
 

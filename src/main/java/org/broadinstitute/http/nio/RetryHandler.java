@@ -158,8 +158,12 @@ public class RetryHandler {
      * @return the value supplied by succesful completion of toRun
      */
     public <T> T runWithRetries(final IOSupplier<T> toRun) throws IOException {
+        return runWithRetries(toRun, null);
+    }
+
+    private <T> T runWithRetries(final IOSupplier<T> toRun, IOException previousError) throws IOException {
         Duration totalSleepTime = Duration.ZERO;
-        int tries = 0;
+        int tries = previousError == null ? 0 : 1;
         IOException mostRecentFailureReason = null;
         while (tries <= maxRetries) {
             try {
@@ -181,6 +185,17 @@ public class RetryHandler {
         throw new OutOfRetriesException(tries - 1, totalSleepTime, mostRecentFailureReason);
     }
 
+    public <T> T tryOnceThenWithRetries(final IOSupplier<T> runFirst,  final IOSupplier<T> thenRunAndRetry) throws IOException {
+        try {
+            return runFirst.get();
+        } catch (IOException initialFailure) {
+            if (isRetryable(initialFailure)) {
+                return runWithRetries(thenRunAndRetry, initialFailure);
+            } else {
+                throw initialFailure;
+            }
+        }
+    }
     /**
      * @param attempt attempt number, used to determine the wait time
      * @return the actual amount of time this slept for

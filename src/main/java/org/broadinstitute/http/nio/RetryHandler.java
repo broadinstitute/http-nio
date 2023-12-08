@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import javax.net.ssl.SSLException;
 import java.io.EOFException;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.URI;
@@ -40,13 +41,14 @@ public class RetryHandler {
             SSLException.class,
             EOFException.class,
             SocketException.class,
-            SocketTimeoutException.class
+            SocketTimeoutException.class,
+            InterruptedIOException.class
     );
 
     /**
      * default set of HTTP codes which will be retried
      */
-    public static final Set<Integer> DEFAULT_RETRYABLE_HTTP_CODES = Set.of(500, 502, 503);
+    public static final Set<Integer> DEFAULT_RETRYABLE_HTTP_CODES = Set.of(408, 429, 500, 502, 503, 504);
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RetryHandler.class);
 

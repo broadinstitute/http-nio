@@ -8,6 +8,7 @@ import java.io.BufferedInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InterruptedIOException;
 import java.net.URI;
 import java.net.URL;
 import java.net.http.HttpClient;
@@ -199,7 +200,7 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
                         size = Long.parseLong(contentLengthStrings.get(0));
                     }
                 } catch (InterruptedException e) {
-                    throw new IOException("Interrupted while trying to get size of file at " + uri.toString(), e);
+                    throw new InterruptedIOException("Interrupted while trying to get size of file at " + uri.toString());
                 }
             }
         });
@@ -274,7 +275,7 @@ public class HttpSeekableByteChannel implements SeekableByteChannel {
         } catch (final IOException ex) {
             throw new IOException("Failed to connect to " + uri + " at position: " + position, ex);
         } catch (final InterruptedException ex) {
-            throw new IOException("Interrupted while connecting to " + uri + " at position: " + position, ex);
+            throw new InterruptedIOException("Interrupted while connecting to " + uri + " at position: " + position);
         }
         assertGoodHttpResponse(response, isRangeRequest);
         backingStream = new BufferedInputStream(response.body());

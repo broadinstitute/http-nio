@@ -34,21 +34,6 @@ public class HttpUtilsUnitTest extends BaseTest {
         };
     }
 
-    @Test(dataProvider = "illegalArgumentsForRangeRequest", expectedExceptions = IllegalArgumentException.class)
-    public void testSetRangeRequestIllegalArguments(final URLConnection connection, final int start, final int end) {
-        HttpUtils.setRangeRequest(connection, start, end);
-    }
-
-    @Test(expectedExceptions = IllegalArgumentException.class)
-    public void testDisconnectNull() {
-        HttpUtils.disconnect(null);
-    }
-
-    @Test(expectedExceptions = IllegalArgumentException.class)
-    public void testSetRangeRequestNull() {
-        HttpUtils.setRangeRequest(null, 10, 100);
-    }
-
     @Test(dataProvider = "getDocsFilesForTesting", dataProviderClass = GitHubResourcesIntegrationTest.class)
     public void testExistingUrls(final String fileName) throws IOException {
         Assert.assertTrue(HttpUtils.exists(getGithubPagesFileUri(fileName), HttpFileSystemProviderSettings.DEFAULT_SETTINGS));

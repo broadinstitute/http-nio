@@ -287,41 +287,6 @@ public class HttpSeekableByteChannelUnitTest extends BaseTest {
         }
     }
 
-
-    private static class FailsAfterNBytesChannel implements ReadableByteChannel{
-        boolean isOpen = true;
-        private final int bytesToWriteBeforeFailing;
-        private int bytesWritten = 0;
-
-        private FailsAfterNBytesChannel(final int bytesToWriteBeforeFailing) {
-            this.bytesToWriteBeforeFailing = bytesToWriteBeforeFailing;
-        }
-
-        @Override
-        public int read(final ByteBuffer dst) throws IOException {
-            while(bytesWritten < bytesToWriteBeforeFailing && bytesWritten < dst.capacity()) {
-                dst.put((byte) ++bytesWritten);
-                dst.mark(); // mess with the buffer
-            }
-
-            if (bytesWritten == dst.capacity()){
-                    return bytesWritten;
-            }  else {
-                dst.reset();  // mess with the buffer
-                throw new IOException("Failed after " +bytesWritten + " bytes");
-            }
-        }
-
-        @Override
-        public boolean isOpen() {
-            return isOpen;
-        }
-
-        @Override
-        public void close() throws IOException {
-            isOpen = false;
-        }
-    }
     @Test
     public void testFailedReadDoesntPerturbBuffer() throws IOException {
         final ByteBuffer buf = ByteBuffer.allocate(100);
@@ -344,5 +309,43 @@ public class HttpSeekableByteChannelUnitTest extends BaseTest {
         Assert.assertEquals(buf.get(), 97);
         Assert.assertEquals(buf.get(), 96);
         Assert.assertEquals(buf.get(), 95);
+    }
+
+    /**
+     * A channel implementation for testing which writes bytes until it hits a set byte limit and then throws an exception
+     */
+    public static class FailsAfterNBytesChannel implements ReadableByteChannel {
+        boolean isOpen = true;
+        private final int bytesToWriteBeforeFailing;
+        private int bytesWritten = 0;
+
+        public FailsAfterNBytesChannel(final int bytesToWriteBeforeFailing) {
+            this.bytesToWriteBeforeFailing = bytesToWriteBeforeFailing;
+        }
+
+        @Override
+        public int read(final ByteBuffer dst) throws IOException {
+            while (bytesWritten < bytesToWriteBeforeFailing && bytesWritten < dst.capacity()) {
+                dst.put((byte) ++bytesWritten);
+                dst.mark(); // mess with the buffer
+            }
+
+            if (bytesWritten == dst.capacity()) {
+                return bytesWritten;
+            } else {
+                dst.reset();  // mess with the buffer
+                throw new IOException("Failed after " + bytesWritten + " bytes");
+            }
+        }
+
+        @Override
+        public boolean isOpen() {
+            return isOpen;
+        }
+
+        @Override
+        public void close() {
+            isOpen = false;
+        }
     }
 }

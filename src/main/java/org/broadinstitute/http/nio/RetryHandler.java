@@ -185,6 +185,21 @@ public class RetryHandler {
         throw new OutOfRetriesException(tries - 1, totalSleepTime, mostRecentFailureReason);
     }
 
+    /**
+     * First attempt the runFirst function.  If that fails and the error is retryable, retry using the thenRunAndRetry
+     * function.
+     *
+     * This is useful when there is a potentially efficient way to do something by taking advantage of the existing
+     * state of things, but in the case that that fails itt leaves a messy state and has to be cleaned up before trying
+     * again.
+     *
+     * @param runFirst first way of obtaining the value
+     * @param thenRunAndRetry second method which must safely retriable
+     * @return the value of the first non failing function call
+     * @param <T> value to be returned
+     * @throws IOException when an is thrown in the payload functions, and it's either not retryable
+     *         or retries are exhausted.
+     */
     public <T> T tryOnceThenWithRetries(final IOSupplier<T> runFirst,  final IOSupplier<T> thenRunAndRetry) throws IOException {
         try {
             return runFirst.get();

@@ -12,6 +12,7 @@ import java.net.URISyntaxException;
 import java.nio.file.InvalidPathException;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
@@ -348,26 +349,74 @@ final class HttpPath implements Path {
         throw new UnsupportedOperationException("Not implemented");
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @implNote since HttpPaths are always absolute, it's really only useful to resolve the system file path
+     * type against them.  This will always return an HttpPath so if an absolute path of another type is given as other
+     * than this will throw {@link IllegalArgumentException}
+     */
     @Override
-    public Path resolve(final Path other) {
-        throw new UnsupportedOperationException("Not implemented");
+    public HttpPath resolve(final Path other) {
+        if(other == null){
+            return this;
+        } else if(other.isAbsolute()){
+            if(other instanceof HttpPath absolutePath){
+                return absolutePath;
+            } else {
+                throw new IllegalArgumentException("Cannot a resolve an absolute path which isn't an HttpPath against an" +
+                        " HttpPath."
+                        + "\nThis path is: " + this.toUriString()
+                        + "\nThe problematic path is an instance of " + other.getClass().getName()
+                        + "\nOther path: " + other);
+            }
+        } else {
+            final URI otherUri;
+            try {
+                otherUri = new URI(other.toString());
+            } catch (URISyntaxException e) {
+                throw new IllegalArgumentException("Can only resolve http(s) paths against fully encoded paths which are valid URIs.", e);
+            }
+            if(otherUri.getScheme() != null){
+                throw new CantDealWithThisException("Attempting to resolve this against a path which is relatve but looks "
+                        + "like it has a scheme."
+                        + "\nThis: " + this
+                        + "\nOther: " + other
+                        + "\nOther interpretted as URI: " + otherUri
+                        + "\nThis is a limitatation of the current implementation of resolve."
+                        + "\nPlease use choose a less horrible file name or get in touch with the developers to complain.");
+
+            }
+            return new HttpPath(fs, otherUri.getRawQuery(),
+                    otherUri.getRawFragment(),
+                    this.isAbsolute(),
+                    concatPaths(this.normalizedPath, getNormalizedPathBytes(otherUri.getRawPath(), false)));
+        }
+    }
+
+    /**
+     * Thrown when an input could potentially be handled by this method but it's more
+     * complicated to deal with than the developers had time for
+     */
+    public static class CantDealWithThisException extends IllegalArgumentException{
+        /**
+         * @param message explain why the developers can't deal wih this
+         */
+        public CantDealWithThisException(String message){
+            super(message);
+        }
+    }
+
+
+    @Override
+    public HttpPath resolve(final String other) {
+        return resolve(other == null ? null: Paths.get(other));
     }
 
     @Override
-    public Path resolve(final String other) {
-        throw new UnsupportedOperationException("Not implemented");
+    public Path resolveSibling(final String other){
+        return resolveSibling(other == null ? null : Paths.get(other));
     }
-
-    @Override
-    public Path resolveSibling(final Path other) {
-        throw new UnsupportedOperationException("Not implemented");
-    }
-
-    @Override
-    public Path resolveSibling(final String other) {
-        throw new UnsupportedOperationException("Not implemented");
-    }
-
     @Override
     public Path relativize(final Path other) {
         throw new UnsupportedOperationException("Not implemented");
@@ -510,9 +559,11 @@ final class HttpPath implements Path {
     }
 
     private String toUriString() {
+
         // TODO - maybe we should cache (https://github.com/magicDGS/jsr203-http/issues/18)
         // adding scheme, authority and normalized path
-        final StringBuilder sb = new StringBuilder(fs.provider().getScheme()) // scheme
+        final StringBuilder sb = new StringBuilder()
+                .append(fs.provider().getScheme()) // scheme
                 .append("://")
                 .append(fs.getAuthority()) // authority
                 .append(new String(normalizedPath, HttpUtils.HTTP_PATH_CHARSET));
@@ -659,5 +710,13 @@ final class HttpPath implements Path {
             len--;
         }
         return len;
+    }
+
+    private static byte[] concatPaths(byte[] array1, byte[] array2) {
+        int array1ModifiedLength = getLastIndexWithoutTrailingSlash(array1) + 1;
+        byte[] result = Arrays.copyOf(array1, array1ModifiedLength + 1 + array2.length );
+        result[array1ModifiedLength] = HttpUtils.HTTP_PATH_SEPARATOR_CHAR;
+        System.arraycopy(array2, 0, result, array1ModifiedLength + 1, array2.length);
+        return result;
     }
 }

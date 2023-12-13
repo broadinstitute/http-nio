@@ -629,4 +629,108 @@ public class HttpPathUnitTest extends BaseTest {
                 new HttpPath(TEST_FS, withSlashes, null, null),
                 new HttpPath(TEST_FS, withoutSlashes, null, null));
     }
+
+    @DataProvider
+    public Object[][] toResolve(){
+        return new Object[][]{
+            {getHttpPath("http://hello.com"), null, getHttpPath("http://hello.com")},
+            {getHttpPath("http://hello.com"), getHttpPath("http://goodbye.com"), getHttpPath("http://goodbye.com")},
+            {getHttpPath("http://hello.com"), Paths.get("file.txt"), getHttpPath("http://hello.com/file.txt")},
+            {getHttpPath("http://hello.com/"), Paths.get("file.txt"), getHttpPath("http://hello.com/file.txt")},
+            {getHttpPath("https://hello.com"), Paths.get("file.txt"), getHttpPath("https://hello.com/file.txt")},
+            {getHttpPath("https://hello.com/subdir"),
+                    Paths.get("deeper/file.txt"),
+                    getHttpPath("https://hello.com/subdir/deeper/file.txt")},
+
+            {getHttpPath("https://hello.com/subdir/"),
+                    Paths.get("deeper/file.txt"),
+                    getHttpPath("https://hello.com/subdir/deeper/file.txt")},
+
+            {getHttpPath("https://hello.com/subdir/file.txt?something=somethingelse,boom=shakalaka#hereIam"),
+                    Paths.get("subfolder?this=mine#thereItis"),
+                    getHttpPath("https://hello.com/subdir/file.txt/subfolder?this=mine#thereItis")},
+
+            {getHttpPath("https://hello.com/subdir/file%20path?something=somethingelse,boom=shakalaka#hereIam"),
+                    Paths.get("sub%20folder?this=mi%20ne#thereIt%20is"),
+                    getHttpPath("https://hello.com/subdir/file%20path/sub%20folder?this=mi%20ne#thereIt%20is")}
+        };
+    }
+    @Test(dataProvider = "toResolve")
+    public void testResolve(HttpPath first, Path second, HttpPath expected){
+        final Path actual = first.resolve(second);
+        Assert.assertEquals(actual, expected, "\nexpected:\t " + expected + "\nactual:\t\t" + actual);
+    }
+
+
+
+    @DataProvider
+    public Object[][] resolveStrings(){
+        return new Object[][]{
+                {getHttpPath("http://hello.com"), null, getHttpPath("http://hello.com")}, // if null return this
+                {getHttpPath("http://hello.com"), "file.txt", getHttpPath("http://hello.com/file.txt")}, //if other is absolute return other
+                {getHttpPath("http://hello.com"), "", getHttpPath("http://hello.com")},
+                {getHttpPath("http://hello.com/"), "file.txt", getHttpPath("http://hello.com/file.txt")},
+                {getHttpPath("https://hello.com"), "file.txt", getHttpPath("https://hello.com/file.txt")},
+                {getHttpPath("https://hello.com/subdir"),
+                        "deeper/file.txt",
+                        getHttpPath("https://hello.com/subdir/deeper/file.txt")},
+
+                {getHttpPath("https://hello.com/subdir/"),
+                        "deeper/file.txt",
+                        getHttpPath("https://hello.com/subdir/deeper/file.txt")},
+
+                {getHttpPath("https://hello.com/subdir/file.txt?something=somethingelse,boom=shakalaka#hereIam"),
+                        "subfolder?this=mine#thereItis",
+                        getHttpPath("https://hello.com/subdir/file.txt/subfolder?this=mine#thereItis")},
+
+                {getHttpPath("https://hello.com/subdir/file%20path?something=somethingelse,boom=shakalaka#hereIam"),
+                        "sub%20folder?this=mi%20ne#thereIt%20is",
+                        getHttpPath("https://hello.com/subdir/file%20path/sub%20folder?this=mi%20ne#thereIt%20is")}
+        };
+    }
+
+    @Test(dataProvider = "resolveStrings")
+    public void testResolveString(HttpPath path, String resolveString, HttpPath expected){
+        Assert.assertEquals(path.resolve(resolveString), expected);
+    }
+
+    @Test(expectedExceptions = HttpPath.CantDealWithThisException.class)
+    public void testWeGiveUpOnHorribleInput(){
+        getHttpPath("http://hello.com/hi.there").resolve("http://goodbye.com");
+    }
+
+    @DataProvider
+    public Object[][] getSiblingTests() {
+        return new Object[][]{
+                {getHttpPath("http://hello.com/"), "", "http://hello.com"},
+                {getHttpPath("http://hello.com"), "file.txt", "http://hello.com/file.txt"},
+                {getHttpPath("http://hello.com/"), "file.txt", "http://hello.com/file.txt"},
+                {getHttpPath("http://hello.com/file.tx"), "picture.jpg", "http://hello.com/picture.jpg"},
+
+                {getHttpPath("http://hello.com/subdir/subdir2/"), "picture.jpg", "http://hello.com/subdir/picture.jpg"},
+                {getHttpPath("http://hello.com/subdir/subdir2"), "picture.jpg", "http://hello.com/subdir/picture.jpg"},
+
+                {getHttpPath("http://hello.com/subdir/subdir2/?query=yes#hashtag"), "picture.jpg?query=maybe#octothorpe", "http://hello.com/subdir/picture.jpg?query=maybe#"},
+                {getHttpPath("http://hello.com/subdir/subdir2?query=yes#hashtag"), "picture.jpg?query=maybe#", "http://hello.com/subdir/picture.jpg?query=maybe#"},
+        };
+    }
+
+    @Test(dataProvider = "getSiblingTests")
+    public void testResolveSibling(HttpPath path, String toResolve, String expected){
+        Assert.assertEquals(path.resolveSibling(toResolve), getHttpPath(expected));
+    }
+
+    @Test(expectedExceptions = NullPointerException.class)
+    public void testNullSiblingIsNPE(){
+        getHttpPath("http://hello.com").resolveSibling((String)null);
+    }
+
+    @Test(expectedExceptions = IllegalArgumentException.class)
+    public void testUnencoded() {
+        getHttpPath("https://hello.com/subdir/file%20path?something=somethingelse,boom=shakalaka#hereIam").resolve(Paths.get("sub folder?this=mi ne#thereIt is"));
+    }
+    public static HttpPath getHttpPath(String path) {
+        return (HttpPath)Paths.get(URI.create(path));
+    }
+
 }

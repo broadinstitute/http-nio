@@ -1,5 +1,6 @@
 package org.broadinstitute.http.nio;
 
+import htsjdk.samtools.SamFiles;
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
@@ -11,6 +12,8 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.stream.StreamSupport;
+
+
 
 /**
  * @author Daniel Gomez-Sanchez (magicDGS)
@@ -209,17 +212,17 @@ public class HttpPathUnitTest extends BaseTest {
     @DataProvider
     public Object[][] fileNames() {
         return new Object[][] {
-                {"/index.html", "/index.html"},
-                {"/dir/index.html", "/index.html"},
-                {"/dir1/dir2/index.html", "/index.html"},
+                {"/index.html", "index.html"},
+                {"/dir/index.html", "index.html"},
+                {"/dir1/dir2/index.html", "index.html"},
                 // should also work with redundant paths (as we are already normalizing)
-                {"/dir//index.html", "/index.html"},
-                {"/dir1//dir2//index.txt", "/index.txt"},
+                {"/dir//index.html", "index.html"},
+                {"/dir1//dir2//index.txt", "index.txt"},
                 //Check we ignore queries and fragments
-                {"/dir1//dir2//index.txt?query=hello#2", "/index.txt"},
+                {"/dir1//dir2//index.txt?query=hello#2", "index.txt"},
                 //check encoding
-                {"/dir1//dir%202//index.txt", "/index.txt"},
-                {"/dir1//dir2//index%20file.txt", "/index%20file.txt"}
+                {"/dir1//dir%202//index.txt", "index.txt"},
+                {"/dir1//dir2//index%20file.txt", "index%20file.txt"}
 
         };
     }
@@ -230,7 +233,7 @@ public class HttpPathUnitTest extends BaseTest {
         // the best way to check if it is correct is to check the string representation
         // because the equal method should include the absolute status
         Assert.assertEquals(path.getFileName().toString(),
-                TEST_FS.getPath(expectedName).toString());
+                expectedName);
         // file names are never absolute
         Assert.assertFalse(path.getFileName().isAbsolute());
     }
@@ -634,7 +637,7 @@ public class HttpPathUnitTest extends BaseTest {
     public Object[][] toResolve(){
         return new Object[][]{
             {getHttpPath("http://hello.com"), null, getHttpPath("http://hello.com")},
-            {getHttpPath("http://hello.com"), getHttpPath("http://goodbye.com"), getHttpPath("http://goodbye.com")},
+        //    {getHttpPath("http://hello.com"), getHttpPath("http://goodbye.com"), getHttpPath("http://goodbye.com")},  unsupproted
             {getHttpPath("http://hello.com"), Paths.get("file.txt"), getHttpPath("http://hello.com/file.txt")},
             {getHttpPath("http://hello.com/"), Paths.get("file.txt"), getHttpPath("http://hello.com/file.txt")},
             {getHttpPath("https://hello.com"), Paths.get("file.txt"), getHttpPath("https://hello.com/file.txt")},
@@ -667,7 +670,7 @@ public class HttpPathUnitTest extends BaseTest {
     public Object[][] resolveStrings(){
         return new Object[][]{
                 {getHttpPath("http://hello.com"), null, getHttpPath("http://hello.com")}, // if null return this
-                {getHttpPath("http://hello.com"), "file.txt", getHttpPath("http://hello.com/file.txt")}, //if other is absolute return other
+               // {getHttpPath("http://hello.com"), "file.txt", getHttpPath("http://hello.com/file.txt")}, //if other is absolute return other <-  this is unsupported
                 {getHttpPath("http://hello.com"), "", getHttpPath("http://hello.com")},
                 {getHttpPath("http://hello.com/"), "file.txt", getHttpPath("http://hello.com/file.txt")},
                 {getHttpPath("https://hello.com"), "file.txt", getHttpPath("https://hello.com/file.txt")},
@@ -694,9 +697,22 @@ public class HttpPathUnitTest extends BaseTest {
         Assert.assertEquals(path.resolve(resolveString), expected);
     }
 
-    @Test(expectedExceptions = HttpPath.CantDealWithThisException.class)
-    public void testWeGiveUpOnHorribleInput(){
-        getHttpPath("http://hello.com/hi.there").resolve("http://goodbye.com");
+    @DataProvider
+    public Object[][] absoluteStringsToResolveAgainst() {
+            return new Object[][]{
+                    {"http://example.com"},
+                    {"http://example.com/file.txt"},
+                    {"https://example.com"},
+                    {"https://example.com/file.txt"},
+                    {"file:///local"},
+                    {"c://local"},
+                    {"file:///local/file"}
+            };
+    }
+
+    @Test(dataProvider = "absoluteStringsToResolveAgainst", expectedExceptions = UnsupportedOperationException.class)
+    public void testResolveAgainstAbsoluteFailsStrings(String other){
+        getHttpPath("http://www.example.com/file.txt").resolve(other);
     }
 
     @DataProvider
@@ -716,8 +732,14 @@ public class HttpPathUnitTest extends BaseTest {
     }
 
     @Test(dataProvider = "getSiblingTests")
-    public void testResolveSibling(HttpPath path, String toResolve, String expected){
+    public void testResolveSiblingString(HttpPath path, String toResolve, String expected){
         Assert.assertEquals(path.resolveSibling(toResolve), getHttpPath(expected));
+    }
+
+    @Test(dataProvider = "getSiblingTests")
+    public void testResolveSiblingPath(HttpPath path, String toResolve, String expected){
+        Path other = Paths.get(toResolve);
+        Assert.assertEquals(path.resolveSibling(other), getHttpPath(expected));
     }
 
     @Test(expectedExceptions = NullPointerException.class)
@@ -729,8 +751,42 @@ public class HttpPathUnitTest extends BaseTest {
     public void testUnencoded() {
         getHttpPath("https://hello.com/subdir/file%20path?something=somethingelse,boom=shakalaka#hereIam").resolve(Paths.get("sub folder?this=mi ne#thereIt is"));
     }
+
     public static HttpPath getHttpPath(String path) {
         return (HttpPath)Paths.get(URI.create(path));
     }
 
+    @DataProvider
+    public static Object[][] relativePaths() {
+        final HttpPath absolutePath = getHttpPath("https://example.com/pile/of/fastas/fasta.gz");
+        final HttpPath absolutePathWithQueryAndReference = getHttpPath("https://example.com/pile/of/fastas/fasta.gz?hi=there#kablam");
+        return new Object[][]{
+                {absolutePath.subpath(0, 4), "pile/of/fastas/fasta.gz"},
+                {absolutePath.subpath(1, 3), "of/fastas"},
+                {absolutePath.subpath(3, 4), "fasta.gz"},
+                {absolutePathWithQueryAndReference.subpath(0, 4), "pile/of/fastas/fasta.gz"}, //query and reference are not kept by subpath
+                {absolutePathWithQueryAndReference.subpath(1, 3), "of/fastas"},
+                {absolutePathWithQueryAndReference.subpath(3, 4), "fasta.gz"},
+        };
+    }
+
+    @Test(dataProvider = "relativePaths")
+    public void testRelativePathsToString(Path subpath, String expected){
+        Assert.assertEquals(subpath.toString(), expected);
+    }
+
+    // From htsjdk reported failure
+    @Test
+    public void testResolveFasta() {
+        Path fastaFile = getHttpPath("https://example.com/fastas/fasta.gz");
+        final Path fileNamePath = fastaFile.getFileName();
+        final String indexName = fileNamePath + ".fai";
+        fastaFile.resolveSibling(indexName);
+    }
+
+    @Test
+    public void testWithHtsjdkFindIndex(){
+        final Path index = SamFiles.findIndex(getHttpPath("http://example.com/example.bam"));
+        Assert.assertEquals(index, getHttpPath("http://example.com/example.bai"));
+    }
 }

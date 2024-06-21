@@ -12,7 +12,6 @@ import java.net.URISyntaxException;
 import java.nio.file.InvalidPathException;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
@@ -80,11 +79,11 @@ final class HttpPath implements Path {
      * @param query          query. May be {@code null}.
      * @param reference      reference. May be {@code null}.
      * @param normalizedPath normalized path (as a byte array). Shouldn't be {@code null}.
-     *
      * @implNote does not perform any check for efficiency.
      */
     private HttpPath(final HttpFileSystem fs,
-            final String query, final String reference,
+            final String query,
+            final String reference,
             final boolean absolute,
             final byte... normalizedPath) {
         this.fs = fs;
@@ -97,7 +96,7 @@ final class HttpPath implements Path {
         this.absolute = absolute;
 
         // normalized path bytes (shouldn't be null)
-        this.normalizedPath = normalizedPath;
+        this.normalizedPath = Utils.nonNull(normalizedPath,  () -> "path may not be null");
     }
 
     /**
@@ -109,7 +108,7 @@ final class HttpPath implements Path {
      * @param reference reference component for the URL (optional).
      */
     HttpPath(final HttpFileSystem fs, final String path, final String query,
-            final String reference) {
+             final String reference) {
         // always absolute and checking it when converting to byte[]
         this(Utils.nonNull(fs, () -> "null fs"), query, reference, true,
                 getNormalizedPathBytes(Utils.nonNull(path, () -> "null path"), true));
@@ -128,7 +127,7 @@ final class HttpPath implements Path {
     @Override
     public Path getRoot() {
         // root is a Path with only the byte array (always absolute)
-        return new HttpPath(fs, null, null, true);
+        return new HttpPath(fs, null, null, true, new byte[0]);
     }
 
     /**
@@ -352,80 +351,73 @@ final class HttpPath implements Path {
     /**
      * {@inheritDoc}
      *
-     * @implNote since HttpPaths are always absolute, it's really only useful to resolve the system file path
-     * type against them.  This will always return an HttpPath so if an absolute path of another type is given as other
-     * than this will throw {@link IllegalArgumentException}
+     * @implNote This implementation differs from the expected behavior of the method when other is absolute. Instead
+     * of returning other in that case it will throw {@link UnsupportedOperationException}.
      */
     @Override
     public HttpPath resolve(final Path other) {
         if(other == null){
             return this;
-        } else if(other.isAbsolute()){
-            if(other instanceof HttpPath absolutePath){
-                return absolutePath;
-            } else {
-                throw new IllegalArgumentException("Cannot a resolve an absolute path which isn't an HttpPath against an" +
-                        " HttpPath."
-                        + "\nThis path is: " + this.toUriString()
+        }  else if(other.isAbsolute()){
+            //Note: This violates the general contract of the method but shouldn't be important practically.
+                throw new UnsupportedOperationException("Cannot a resolve an absolute path against an http(s)."
+                        + "\nThis path is: " + this
                         + "\nThe problematic path is an instance of " + other.getClass().getName()
                         + "\nOther path: " + other);
-            }
         } else {
-            final URI otherUri;
             try {
-                otherUri = new URI(other.toString());
+                final URI otherUri = new URI(other.toString());
+                return resolve(otherUri);
             } catch (URISyntaxException e) {
                 throw new IllegalArgumentException("Can only resolve http(s) paths against fully encoded paths which are valid URIs.", e);
             }
-            if(otherUri.getScheme() != null){
-                throw new CantDealWithThisException("Attempting to resolve this against a path which is relatve but looks "
-                        + "like it has a scheme."
-                        + "\nThis: " + this
-                        + "\nOther: " + other
-                        + "\nOther interpretted as URI: " + otherUri
-                        + "\nThis is a limitatation of the current implementation of resolve."
-                        + "\nPlease use choose a less horrible file name or get in touch with the developers to complain.");
-
-            }
-            return new HttpPath(fs, otherUri.getRawQuery(),
-                    otherUri.getRawFragment(),
-                    this.isAbsolute(),
-                    concatPaths(this.normalizedPath, getNormalizedPathBytes(otherUri.getRawPath(), false)));
         }
     }
 
-    /**
-     * Thrown when an input could potentially be handled by this method but it's more
-     * complicated to deal with than the developers had time for
-     */
-    public static class CantDealWithThisException extends IllegalArgumentException{
-        /**
-         * @param message explain why the developers can't deal wih this
-         */
-        public CantDealWithThisException(String message){
-            super(message);
-        }
+    private HttpPath resolve(URI other){
+        return new HttpPath(fs, other.getRawQuery(),
+                other.getRawFragment(),
+                this.isAbsolute(),
+                concatPaths(this.normalizedPath, getNormalizedPathBytes(other.getRawPath(), false)));
     }
-
 
     @Override
     public HttpPath resolve(final String other) {
-        return resolve(other == null ? null: Paths.get(other));
+        return resolve(fromRelativeString(other));
     }
 
     @Override
     public Path resolveSibling(final String other){
-        return resolveSibling(other == null ? null : Paths.get(other));
+        return resolveSibling(fromRelativeString(other));
     }
+
     @Override
     public Path relativize(final Path other) {
         throw new UnsupportedOperationException("Not implemented");
     }
 
+    private HttpPath fromRelativeString(final String other) {
+        if (other == null) {
+            return null;
+        } else {
+            try {
+                final URI uri = new URI(other);
+                if (uri.isAbsolute()) {
+                    throw new UnsupportedOperationException("Resolving absolute URI strings against an HTTP path is not supported." +
+                            "\nURI: " + uri);
+                }
+                return new HttpPath(getFileSystem(), uri.getRawFragment(), uri.getRawQuery(), false,
+                        getNormalizedPathBytes(uri.getRawPath(), false));
+            } catch (URISyntaxException e) {
+                throw new IllegalArgumentException("Cannot resolve against an invalid URI.", e);
+            }
+        }
+    }
+
     @Override
     public URI toUri() {
         try {
-            return new URI(toUriString());
+            return new URI(toUriString(true));
         } catch (final URISyntaxException e) {
             throw new IOError(e);
         }
@@ -436,8 +428,8 @@ final class HttpPath implements Path {
         if (isAbsolute()) {
             return this;
         }
-        // just create a new path with a different absolute status
-        return new HttpPath(fs, query, reference, true, normalizedPath);
+        // just fromUri a new path with a different absolute status
+        return new HttpPath(fs, query, reference, true,normalizedPath);
     }
 
     @Override
@@ -555,18 +547,25 @@ final class HttpPath implements Path {
 
     @Override
     public String toString() {
-        return toUriString();
+        return toUriString(isAbsolute());
     }
 
-    private String toUriString() {
-
+    private String toUriString(boolean includeRoot) {
         // TODO - maybe we should cache (https://github.com/magicDGS/jsr203-http/issues/18)
         // adding scheme, authority and normalized path
-        final StringBuilder sb = new StringBuilder()
-                .append(fs.provider().getScheme()) // scheme
-                .append("://")
-                .append(fs.getAuthority()) // authority
-                .append(new String(normalizedPath, HttpUtils.HTTP_PATH_CHARSET));
+        final StringBuilder sb = new StringBuilder();
+        if(includeRoot) {
+            sb.append(fs.provider().getScheme()) // scheme
+                    .append("://")
+                    .append(fs.getAuthority()) // authority
+                    .append(new String(normalizedPath, HttpUtils.HTTP_PATH_CHARSET));
+        }  else if( normalizedPath.length != 0){
+            if(normalizedPath[0] == HttpUtils.HTTP_PATH_SEPARATOR_CHAR) {
+                sb.append(new String(normalizedPath, 1, normalizedPath.length - 1, HttpUtils.HTTP_PATH_CHARSET));
+            } else {
+                 sb.append(new String(normalizedPath, HttpUtils.HTTP_PATH_CHARSET));
+            }
+        }
         if (query != null) {
             sb.append('?').append(query);
         }
@@ -620,7 +619,6 @@ final class HttpPath implements Path {
      * Gets the path as a normalized (without multiple slashes) array of bytes.
      *
      * @param path          path to convert into byte[]
-     * @param checkRelative if {@code true}, check if the path is absolute.
      *
      * @return array of bytes, without multiple slashes together.
      */
@@ -719,4 +717,5 @@ final class HttpPath implements Path {
         System.arraycopy(array2, 0, result, array1ModifiedLength + 1, array2.length);
         return result;
     }
+    
 }

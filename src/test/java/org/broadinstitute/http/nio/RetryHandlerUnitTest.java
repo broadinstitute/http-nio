@@ -37,7 +37,7 @@ public class RetryHandlerUnitTest {
                 {new SocketException(), true},
                 {new SocketTimeoutException(), true},
                 {new IOException(new SocketException()), true},
-                {new IOException(new ClosedChannelException()), false},
+                {new IOException(new ClosedChannelException()), true},
                 {new IOException(new IOException()), false},
         };
     }

@@ -360,13 +360,15 @@ final class HttpPath implements Path {
             return this;
         }  else if(other.isAbsolute()){
             //Note: This violates the general contract of the method but shouldn't be important practically.
-                throw new UnsupportedOperationException("Cannot a resolve an absolute path against an http(s)."
+                throw new UnsupportedOperationException("Cannot resolve an absolute path against an http(s) path."
                         + "\nThis path is: " + this
                         + "\nThe problematic path is an instance of " + other.getClass().getName()
                         + "\nOther path: " + other);
         } else {
             try {
-                final URI otherUri = new URI(other.toString());
+                final URI otherUri = new URI(other.toString()); // to string is used here instead of the expected toUri because
+                                                                // toUri will produce normalized absolute paths in many filesystems which is
+                                                                // what we don't want
                 return resolve(otherUri);
             } catch (URISyntaxException e) {
                 throw new IllegalArgumentException("Can only resolve http(s) paths against fully encoded paths which are valid URIs.", e);
@@ -383,7 +385,8 @@ final class HttpPath implements Path {
 
     @Override
     public HttpPath resolve(final String other) {
-        return resolve(fromRelativeString(other));
+        return resolve(fromRelativeString(other));  // Paths.get() and the filesystem equivalent can't be used here
+                                                    // because we don't allow them to create relative HttpPaths 
     }
 
     @Override
@@ -619,6 +622,7 @@ final class HttpPath implements Path {
      * Gets the path as a normalized (without multiple slashes) array of bytes.
      *
      * @param path          path to convert into byte[]
+     * @param checkRelative if {@code true}, check if the path is absolute.
      *
      * @return array of bytes, without multiple slashes together.
      */

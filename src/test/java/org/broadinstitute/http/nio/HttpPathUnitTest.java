@@ -637,7 +637,7 @@ public class HttpPathUnitTest extends BaseTest {
     public Object[][] toResolve(){
         return new Object[][]{
             {getHttpPath("http://hello.com"), null, getHttpPath("http://hello.com")},
-        //    {getHttpPath("http://hello.com"), getHttpPath("http://goodbye.com"), getHttpPath("http://goodbye.com")},  unsupproted
+        //    {getHttpPath("http://hello.com"), getHttpPath("http://goodbye.com"), getHttpPath("http://goodbye.com")},  resolving against absolute paths is unsupported
             {getHttpPath("http://hello.com"), Paths.get("file.txt"), getHttpPath("http://hello.com/file.txt")},
             {getHttpPath("http://hello.com/"), Paths.get("file.txt"), getHttpPath("http://hello.com/file.txt")},
             {getHttpPath("https://hello.com"), Paths.get("file.txt"), getHttpPath("https://hello.com/file.txt")},
@@ -703,6 +703,7 @@ public class HttpPathUnitTest extends BaseTest {
                     {"http://example.com"},
                     {"http://example.com/file.txt"},
                     {"https://example.com"},
+                    {"https://example.com/"},
                     {"https://example.com/file.txt"},
                     {"file:///local"},
                     {"c://local"},
@@ -713,6 +714,11 @@ public class HttpPathUnitTest extends BaseTest {
     @Test(dataProvider = "absoluteStringsToResolveAgainst", expectedExceptions = UnsupportedOperationException.class)
     public void testResolveAgainstAbsoluteFailsStrings(String other){
         getHttpPath("http://www.example.com/file.txt").resolve(other);
+    }
+
+    @Test(dataProvider = "absoluteStringsToResolveAgainst", expectedExceptions = UnsupportedOperationException.class)
+    public void testResolveAgainstAbsoluteFailsStringsDomainOnly(String other){
+        getHttpPath("http://www.example.com").resolve(other);
     }
 
     @DataProvider
@@ -726,7 +732,7 @@ public class HttpPathUnitTest extends BaseTest {
                 {getHttpPath("http://hello.com/subdir/subdir2/"), "picture.jpg", "http://hello.com/subdir/picture.jpg"},
                 {getHttpPath("http://hello.com/subdir/subdir2"), "picture.jpg", "http://hello.com/subdir/picture.jpg"},
 
-                {getHttpPath("http://hello.com/subdir/subdir2/?query=yes#hashtag"), "picture.jpg?query=maybe#octothorpe", "http://hello.com/subdir/picture.jpg?query=maybe#"},
+                {getHttpPath("http://hello.com/subdir/subdir2/?query=yes#hashtag"), "picture.jpg?query=maybe#octothorpe", "http://hello.com/subdir/picture.jpg?query=maybe#octothorpe"},
                 {getHttpPath("http://hello.com/subdir/subdir2?query=yes#hashtag"), "picture.jpg?query=maybe#", "http://hello.com/subdir/picture.jpg?query=maybe#"},
         };
     }
@@ -775,16 +781,17 @@ public class HttpPathUnitTest extends BaseTest {
         Assert.assertEquals(subpath.toString(), expected);
     }
 
-    // From htsjdk reported failure
+    // fix for https://github.com/broadinstitute/gatk/issues/8751
     @Test
     public void testResolveFasta() {
         Path fastaFile = getHttpPath("https://example.com/fastas/fasta.gz");
         final Path fileNamePath = fastaFile.getFileName();
         final String indexName = fileNamePath + ".fai";
-        fastaFile.resolveSibling(indexName);
+        Assert.assertEquals(fastaFile.resolveSibling(indexName).toString(), "https://example.com/fastas/fasta.gz.fai");
     }
 
     @Test
+    // similar bug to test resolve fasta, but calling into the htsjdk method itself
     public void testWithHtsjdkFindIndex(){
         final Path index = SamFiles.findIndex(getHttpPath("http://example.com/example.bam"));
         Assert.assertEquals(index, getHttpPath("http://example.com/example.bai"));

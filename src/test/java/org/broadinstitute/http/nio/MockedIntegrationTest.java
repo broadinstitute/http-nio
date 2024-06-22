@@ -89,12 +89,13 @@ public class MockedIntegrationTest extends BaseTest {
     @Test
     public void testRetryFixesError() throws IOException {
         final String body = "Hello";
+        final long bodyLength = body.getBytes(StandardCharsets.UTF_8).length;
+
         wireMockServer.stubFor(get(FILE_URL).inScenario("fail once")
                 .whenScenarioStateIs(Scenario.STARTED)
                 .willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER))
                 .willSetStateTo("errored"));
 
-        final long bodyLength = body.getBytes(StandardCharsets.UTF_8).length;
         wireMockServer.stubFor(get(FILE_URL).inScenario("fail once")
                 .whenScenarioStateIs("errored")
                 .willReturn(ok(body).withHeader("content-length", String.valueOf(bodyLength)))
@@ -114,7 +115,7 @@ public class MockedIntegrationTest extends BaseTest {
         final URI uri = getUri("/file.txt");
         final HttpFileSystemProviderSettings settings = new HttpFileSystemProviderSettings(Duration.ofSeconds(2),
                 HttpClient.Redirect.NORMAL,
-                new HttpFileSystemProviderSettings.RetrySettings(1, RetryHandler.DEFAULT_RETRYABLE_HTTP_CODES,
+                new HttpFileSystemProviderSettings.RetrySettings(2, RetryHandler.DEFAULT_RETRYABLE_HTTP_CODES,
                         RetryHandler.DEFAULT_RETRYABLE_EXCEPTIONS,
                         RetryHandler.DEFALT_RETRYABLE_MESSAGES,
                         e -> false));

@@ -12,6 +12,7 @@ import java.io.InterruptedIOException;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.URI;
+import java.nio.channels.ClosedChannelException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
@@ -42,7 +43,8 @@ public class RetryHandler {
             EOFException.class,
             SocketException.class,
             SocketTimeoutException.class,
-            InterruptedIOException.class
+            InterruptedIOException.class,
+            ClosedChannelException.class
     );
 
     /**

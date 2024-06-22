@@ -77,7 +77,6 @@ public class MockedIntegrationTest extends BaseTest {
     }
     @Test(dataProvider = "getFaults", expectedExceptions = OutOfRetriesException.class)
     public void testConnectionReset(Fault fault) throws IOException {
-        final String body = "Hello";
         final UrlPattern fileUrl = urlEqualTo("/file.txt");
         wireMockServer.stubFor(get(fileUrl)
                 .willReturn(aResponse().withFault(fault)));

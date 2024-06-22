@@ -33,6 +33,7 @@ public class MockedIntegrationTest extends BaseTest {
 
     public static final UrlPattern FILE_URL = urlEqualTo("/file.txt");
     public static final String BODY = "Hello";
+    public static final String LOCAL_HOST = "127.0.0.1"; // the string localhost seems to be problematic on github actions but the IP may work better
     WireMockServer wireMockServer;
     WireMock wireMock;
 
@@ -42,8 +43,8 @@ public class MockedIntegrationTest extends BaseTest {
                 .wireMockConfig()
                 .dynamicPort());
         wireMockServer.start();
-        configureFor("localhost", wireMockServer.port());
-        wireMock = new WireMock("localhost", wireMockServer.port());
+        configureFor(LOCAL_HOST, wireMockServer.port());
+        wireMock = new WireMock(LOCAL_HOST, wireMockServer.port());
     }
 
     @AfterMethod

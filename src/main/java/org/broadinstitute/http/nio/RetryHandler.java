@@ -32,7 +32,7 @@ public class RetryHandler {
     /**
      * the default set of exception messages which are retried when encountered
      */
-    public static final Set<String> DEFALT_RETRYABLE_MESSAGES = Set.of("protocol error:");
+    public static final Set<String> DEFALT_RETRYABLE_MESSAGES = Set.of("protocol error:", "Connection reset by peer");
     //IOExceptions with the string `protocol error` can happen when there is bad data returned during an http request
 
     /**

@@ -53,7 +53,7 @@ java {
     withSourcesJar()
 }
 
-tasks.withType(Javadoc) {
+tasks.withType(Javadoc).configureEach {
     // the title includes the version of the API
     title = "http-nio $version API"
 
@@ -83,7 +83,7 @@ tasks.withType(Javadoc) {
 }
 
 // test task
-tasks.withType(Test) {
+tasks.withType(Test).configureEach {
 
     // tests could be always re-run
     outputs.upToDateWhen { false }
@@ -117,7 +117,7 @@ tasks.withType(Test) {
 }
 
 // for jar tasks
-tasks.withType(Jar) {
+tasks.withType(Jar).configureEach {
     // add license
     from(rootProject.projectDir) {
         include "LICENSE.txt"
